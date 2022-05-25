@@ -272,8 +272,10 @@ create-management-cluster: $(KUSTOMIZE) $(ENVSUBST) ## Create a management clust
 	kubectl create configmap calico-ipv6-addon --from-file=templates/addons/calico-ipv6.yaml
 	kubectl create configmap calico-dual-stack-addon --from-file=templates/addons/calico-dual-stack.yaml
 	kubectl create configmap calico-windows-addon --from-file=templates/addons/windows/calico
+	kubectl create configmap flannel-windows-addon --from-file=templates/addons/windows/flannel
 
 	kubectl apply -f templates/addons/calico-resource-set.yaml
+	kubectl apply -f templates/addons/flannel-resource-set.yaml
 
 	# Wait for CAPZ deployments
 	kubectl wait --for=condition=Available --timeout=5m -n capz-system deployment -l cluster.x-k8s.io/provider=infrastructure-azure
@@ -285,13 +287,7 @@ create-management-cluster: $(KUSTOMIZE) $(ENVSUBST) ## Create a management clust
 .PHONY: create-workload-cluster
 create-workload-cluster: $(ENVSUBST) ## Create a workload cluster.
 	# Create workload Cluster.
-	@if [ -f "$(TEMPLATES_DIR)/$(CLUSTER_TEMPLATE)" ]; then \
-		$(ENVSUBST) < "$(TEMPLATES_DIR)/$(CLUSTER_TEMPLATE)" | kubectl apply -f -; \
-	elif [ -f "$(CLUSTER_TEMPLATE)" ]; then \
-		$(ENVSUBST) < "$(CLUSTER_TEMPLATE)" | kubectl apply -f -; \
-	else \
-		curl --retry "$(CURL_RETRIES)" "$(CLUSTER_TEMPLATE)" | "$(ENVSUBST)" | kubectl apply -f -; \
-	fi
+	$(ENVSUBST) < $(TEMPLATES_DIR)/$(CLUSTER_TEMPLATE) | kubectl apply -f -
 
 	# Wait for the kubeconfig to become available.
 	timeout --foreground 300 bash -c "while ! kubectl get secrets | grep $(CLUSTER_NAME)-kubeconfig; do sleep 1; done"
@@ -471,7 +467,7 @@ generate-addons: fetch-calico-manifests ## Generate metric-server, calico calico
 	$(KUSTOMIZE) build $(ADDONS_DIR)/calico-dual-stack > $(ADDONS_DIR)/calico-dual-stack.yaml
 
 # When updating this, make sure to also update the Windows image version in templates/addons/windows/calico.
-CALICO_VERSION := v3.23.0
+CALICO_VERSION := v3.22.1
 
 .PHONY: fetch-calico-manifests
 fetch-calico-manifests: ## Get Calico release manifests and unzip them.

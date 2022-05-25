@@ -475,6 +475,57 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 		},
 	}
 
+	// use custom NIC definitons in VMSS
+	if len(vmssSpec.NetworkInterfaces) > 0 {
+		nicConfigs := []compute.VirtualMachineScaleSetNetworkConfiguration{}
+		for i, n := range vmssSpec.NetworkInterfaces {
+			nicConfig := compute.VirtualMachineScaleSetNetworkConfiguration{}
+			if n.Id != "" {
+				nicConfig.ID = &n.Id
+				nicConfig.Name = to.StringPtr(vmssSpec.Name + "-" + string(i))
+			} else {
+				nicConfig.EnableAcceleratedNetworking = n.AcceleratedNetworking
+				if len(n.IpConfigs) == 0 {
+					nicConfig.IPConfigurations = &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: to.StringPtr(vmssSpec.Name + "-" + string(i)),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Subnet: &compute.APIEntityReference{
+									ID: to.StringPtr(azure.SubnetID(s.Scope.SubscriptionID(), vmssSpec.VNetResourceGroup, vmssSpec.VNetName, n.SubnetName)),
+								},
+								Primary:                         to.BoolPtr(true),
+								PrivateIPAddressVersion:         compute.IPVersionIPv4,
+								LoadBalancerBackendAddressPools: &backendAddressPools,
+							},
+						},
+					}
+				} else {
+					ipconfigs := []compute.VirtualMachineScaleSetIPConfiguration{}
+					for j, _ := range n.IpConfigs {
+						ipconfig := compute.VirtualMachineScaleSetIPConfiguration{
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{},
+						}
+						if j == 0 {
+							ipconfig.Primary = to.BoolPtr(true)
+						}
+						ipconfig.Subnet = &compute.APIEntityReference{
+							ID: to.StringPtr(azure.SubnetID(s.Scope.SubscriptionID(), vmssSpec.VNetResourceGroup, vmssSpec.VNetName, n.SubnetName)),
+						}
+						ipconfigs = append(ipconfigs, ipconfig)
+					}
+					nicConfig.IPConfigurations = &ipconfigs
+				}
+			}
+			if i == 0 {
+				nicConfig.Primary = to.BoolPtr(true)
+			}
+			nicConfigs = append(nicConfigs, nicConfig)
+		}
+		vmss.VirtualMachineScaleSetProperties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = &nicConfigs
+	} else {
+		// TODO: setup default interface here
+	}
+
 	// Assign Identity to VMSS
 	if vmssSpec.Identity == infrav1.VMIdentitySystemAssigned {
 		vmss.Identity = &compute.VirtualMachineScaleSetIdentity{

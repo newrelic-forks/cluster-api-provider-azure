@@ -87,6 +87,22 @@ type (
 		// SubnetName selects the Subnet where the VMSS will be placed
 		// +optional
 		SubnetName string `json:"subnetName,omitempty"`
+
+		// Network Interfaces to attach to the to a virtual machine
+		// +optional
+		NetworkInterfaces []AzureNetworkInterface `json:"networkInterfaces,omitempty"`
+	}
+
+	AzureNetworkInterface struct {
+		SubnetName            string          `json:"subnetName,omitempty"`
+		IpConfigs             []AzureIPConfig `json:"ipConfigs,omitempty"`
+		AcceleratedNetworking *bool           `json:"acceleratedNetworking,omitempty"`
+	}
+
+	AzureIPConfig struct {
+		PrivateIP       string `json:"privateIP,omitempty"`
+		PublicIP        bool   `json:"publicIP,omitempty"`
+		PublicIPAddress string `json:"publicIPAddress,omitempty"`
 	}
 
 	// AzureMachinePoolSpec defines the desired state of AzureMachinePool.
