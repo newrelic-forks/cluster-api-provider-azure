@@ -428,10 +428,12 @@ var _ = Describe("Workload cluster creation", func() {
 		})
 	})
 
-	// ci-e2e.sh and Prow CI skip this test by default.
-	// To include this test, set `GINKGO_SKIP=""`.
+	// ci-e2e.sh and Prow CI skip this test by default. To include this test, set `GINKGO_SKIP=""`.
+	// This spec expects a user-assigned identity named "cloud-provider-user-identity" in a "capz-ci"
+	// resource group. Override these defaults by setting the USER_IDENTITY and CI_RG environment variables.
 	Context("Creating a cluster that uses the external cloud provider [OPTIONAL]", func() {
 		It("with a 1 control plane nodes and 2 worker nodes", func() {
+			By("using user-assigned identity")
 			clusterName = getClusterName(clusterNamePrefix, "oot")
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: bootstrapClusterProxy,
@@ -499,56 +501,12 @@ var _ = Describe("Workload cluster creation", func() {
 		})
 	})
 
-	Context("Creating a Windows Enabled cluster with dockershim [OPTIONAL]", func() {
-		// Requires 3 control planes due to https://github.com/kubernetes-sigs/cluster-api-provider-azure/issues/857
-		It("With 3 control-plane nodes and 1 Linux worker node and 1 Windows worker node", func() {
-			clusterName = getClusterName(clusterNamePrefix, "win-ha")
-			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
-				ClusterProxy: bootstrapClusterProxy,
-				ConfigCluster: clusterctl.ConfigClusterInput{
-					LogFolder:                filepath.Join(artifactFolder, "clusters", bootstrapClusterProxy.GetName()),
-					ClusterctlConfigPath:     clusterctlConfigPath,
-					KubeconfigPath:           bootstrapClusterProxy.GetKubeconfigPath(),
-					InfrastructureProvider:   clusterctl.DefaultInfrastructureProvider,
-					Flavor:                   "windows",
-					Namespace:                namespace.Name,
-					ClusterName:              clusterName,
-					KubernetesVersion:        e2eConfig.GetVariable(capi_e2e.KubernetesVersion),
-					ControlPlaneMachineCount: pointer.Int64Ptr(3),
-					WorkerMachineCount:       pointer.Int64Ptr(1),
-				},
-				WaitForClusterIntervals:      e2eConfig.GetIntervals(specName, "wait-cluster"),
-				WaitForControlPlaneIntervals: e2eConfig.GetIntervals(specName, "wait-control-plane"),
-				WaitForMachineDeployments:    e2eConfig.GetIntervals(specName, "wait-worker-nodes"),
-			}, result)
-
-			Context("Creating an accessible load balancer", func() {
-				AzureLBSpec(ctx, func() AzureLBSpecInput {
-					return AzureLBSpecInput{
-						BootstrapClusterProxy: bootstrapClusterProxy,
-						Namespace:             namespace,
-						ClusterName:           clusterName,
-						SkipCleanup:           skipCleanup,
-					}
-				})
-			})
-
-			Context("Creating an accessible load balancer for windows", func() {
-				AzureLBSpec(ctx, func() AzureLBSpecInput {
-					return AzureLBSpecInput{
-						BootstrapClusterProxy: bootstrapClusterProxy,
-						Namespace:             namespace,
-						ClusterName:           clusterName,
-						SkipCleanup:           skipCleanup,
-						Windows:               true,
-					}
-				})
-			})
-		})
-	})
-
+	// ci-e2e.sh and Prow CI skip this test by default. To include this test, set `GINKGO_SKIP=""`.
+	// This spec expects a user-assigned identity named "cloud-provider-user-identity" in a "capz-ci"
+	// resource group. Override these defaults by setting the USER_IDENTITY and CI_RG environment variables.
 	Context("Creating a dual-stack cluster [OPTIONAL]", func() {
 		It("With dual-stack worker node", func() {
+			By("using user-assigned identity")
 			clusterName = getClusterName(clusterNamePrefix, "dual-stack")
 			clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
 				ClusterProxy: bootstrapClusterProxy,

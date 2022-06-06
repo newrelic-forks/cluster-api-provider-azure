@@ -44,12 +44,6 @@ source "${REPO_ROOT}/hack/parse-prow-creds.sh"
 # shellcheck source=hack/util.sh
 source "${REPO_ROOT}/hack/util.sh"
 
-# all test regions must support AvailabilityZones
-get_random_region() {
-    local REGIONS=("eastus" "eastus2" "northeurope" "uksouth" "westeurope" "westus2")
-    echo "${REGIONS[${RANDOM} % ${#REGIONS[@]}]}"
-}
-
 setup() {
     if [[ -n "${KUBERNETES_VERSION:-}" ]] && [[ -n "${CI_VERSION:-}" ]]; then
         echo "You may not set both \$KUBERNETES_VERSION and \$CI_VERSION, use one or the other to configure the version/build of Kubernetes to use"
@@ -58,17 +52,30 @@ setup() {
     # setup REGISTRY for custom images.
     : "${REGISTRY:?Environment variable empty or not defined.}"
     "${REPO_ROOT}/hack/ensure-acr-login.sh"
+    if [[ -n "${TEST_CCM:-}" ]]; then
+        # shellcheck source=scripts/ci-build-azure-ccm.sh
+        source "${REPO_ROOT}/scripts/ci-build-azure-ccm.sh"
+        echo "Will use the ${IMAGE_REGISTRY}/${CCM_IMAGE_NAME}:${IMAGE_TAG} cloud-controller-manager image for external cloud-provider-cluster"
+        echo "Will use the ${IMAGE_REGISTRY}/${CNM_IMAGE_NAME}:${IMAGE_TAG} cloud-node-manager image for external cloud-provider-azure cluster"
+    fi
+
     if [[ -z "${CLUSTER_TEMPLATE:-}" ]]; then
         select_cluster_template
     fi
 
     export CLUSTER_NAME="${CLUSTER_NAME:-capz-$(head /dev/urandom | LC_ALL=C tr -dc a-z0-9 | head -c 6 ; echo '')}"
     export AZURE_RESOURCE_GROUP="${CLUSTER_NAME}"
-    export AZURE_LOCATION="${AZURE_LOCATION:-$(get_random_region)}"
+    export AZURE_LOCATION="${AZURE_LOCATION:-$(capz::util::get_random_region)}"
     # Need a cluster with at least 2 nodes
     export CONTROL_PLANE_MACHINE_COUNT="${CONTROL_PLANE_MACHINE_COUNT:-1}"
     export WORKER_MACHINE_COUNT="${WORKER_MACHINE_COUNT:-2}"
     export EXP_CLUSTER_RESOURCE_SET="true"
+
+    # this requires k8s 1.22+
+    if [[ -n "${TEST_WINDOWS:-}" ]]; then
+        export WINDOWS_WORKER_MACHINE_COUNT="${WINDOWS_WORKER_MACHINE_COUNT:-2}"
+        export K8S_FEATURE_GATES="WindowsHostProcessContainers=true"
+    fi
 }
 
 select_cluster_template() {
@@ -154,8 +161,8 @@ export KUBECONFIG="${KUBECONFIG:-${PWD}/kubeconfig}"
 
 # install cloud-provider-azure components, if using out-of-tree
 if [[ -n "${TEST_CCM:-}" ]]; then
-  echo "Installing cloud-provider-azure components via helm"
-  "${HELM}" install --repo https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo cloud-provider-azure --generate-name --set infra.clusterName="${CLUSTER_NAME}" --set cloudControllerManager.imageRepository="${IMAGE_REGISTRY}" \
+    echo "Installing cloud-provider-azure components via helm"
+    "${HELM}" install --repo https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo cloud-provider-azure --generate-name --set infra.clusterName="${CLUSTER_NAME}" --set cloudControllerManager.imageRepository="${IMAGE_REGISTRY}" \
 --set cloudNodeManager.imageRepository="${IMAGE_REGISTRY}" \
 --set cloudControllerManager.imageName="${CCM_IMAGE_NAME}" \
 --set cloudNodeManager.imageName="${CNM_IMAGE_NAME}" \
