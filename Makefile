@@ -268,11 +268,8 @@ create-management-cluster: $(KUSTOMIZE) $(ENVSUBST) ## Create a management clust
 	kubectl wait --for=condition=Available --timeout=5m -n capi-kubeadm-control-plane-system deployment -l cluster.x-k8s.io/provider=control-plane-kubeadm
 
 	# apply CNI ClusterResourceSets
-	kubectl create configmap calico-addon --from-file=templates/addons/calico.yaml
-	kubectl create configmap calico-ipv6-addon --from-file=templates/addons/calico-ipv6.yaml
-	kubectl create configmap calico-dual-stack-addon --from-file=templates/addons/calico-dual-stack.yaml
-	kubectl create configmap calico-windows-addon --from-file=templates/addons/windows/calico
-	kubectl create configmap flannel-windows-addon --from-file=templates/addons/windows/flannel
+	source ./scripts/ci-configmap.sh
+
 
 	kubectl apply -f templates/addons/calico-resource-set.yaml
 	kubectl apply -f templates/addons/flannel-resource-set.yaml

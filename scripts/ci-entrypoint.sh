@@ -51,6 +51,10 @@ get_random_region() {
 }
 
 setup() {
+    if [[ -n "${KUBERNETES_VERSION:-}" ]] && [[ -n "${CI_VERSION:-}" ]]; then
+        echo "You may not set both \$KUBERNETES_VERSION and \$CI_VERSION, use one or the other to configure the version/build of Kubernetes to use"
+        exit 1
+    fi
     # setup REGISTRY for custom images.
     : "${REGISTRY:?Environment variable empty or not defined.}"
     "${REPO_ROOT}/hack/ensure-acr-login.sh"
@@ -72,28 +76,25 @@ select_cluster_template() {
         # shellcheck source=scripts/ci-build-kubernetes.sh
         source "${REPO_ROOT}/scripts/ci-build-kubernetes.sh"
         export CLUSTER_TEMPLATE="test/dev/cluster-template-custom-builds.yaml"
-    elif [[ -n "${CI_VERSION:-}" ]] || [[ -n "${USE_CI_ARTIFACTS:-}" ]]; then
+    elif [[ "${KUBERNETES_VERSION:-}" =~ "latest" ]] || [[ -n "${CI_VERSION:-}" ]]; then
         # export cluster template which contains the manifests needed for creating the Azure cluster to run the tests
-        GOPATH="$(go env GOPATH)"
-        KUBERNETES_BRANCH="$(cd "${GOPATH}/src/k8s.io/kubernetes" && git rev-parse --abbrev-ref HEAD)"
-        if [[ "${KUBERNETES_BRANCH:-}" =~ "release-" ]]; then
-            CI_VERSION_URL="https://dl.k8s.io/ci/latest-${KUBERNETES_BRANCH/release-}.txt"
-        else
-            CI_VERSION_URL="https://dl.k8s.io/ci/latest.txt"
-        fi
         export CLUSTER_TEMPLATE="test/ci/cluster-template-prow-ci-version.yaml"
-        export CI_VERSION="${CI_VERSION:-$(curl -sSL ${CI_VERSION_URL})}"
-        export KUBERNETES_VERSION="${CI_VERSION}"
+        if [[ "${KUBERNETES_VERSION:-}" =~ "latest" ]]; then
+            CI_VERSION_URL="https://dl.k8s.io/ci/${KUBERNETES_VERSION}.txt"
+        fi
     else
         export CLUSTER_TEMPLATE="test/ci/cluster-template-prow.yaml"
     fi
+    if [[ -n "${CI_VERSION:-}" ]] || [[ -n "${CI_VERSION_URL:-}" ]]; then
+        export CI_VERSION="${CI_VERSION:-$(curl -sSL "${CI_VERSION_URL}")}"
+        echo "using CI_VERSION ${CI_VERSION}"
+        export KUBERNETES_VERSION="${CI_VERSION}"
+        echo "using KUBERNETES_VERSION ${KUBERNETES_VERSION}"
+    fi
 
     if [[ -n "${TEST_CCM:-}" ]]; then
-        export CLUSTER_TEMPLATE="test/ci/cluster-template-prow-external-cloud-provider.yaml"
-        # shellcheck source=scripts/ci-build-azure-ccm.sh
-        source "${REPO_ROOT}/scripts/ci-build-azure-ccm.sh"
-        echo "Will use the ${IMAGE_REGISTRY}/${CCM_IMAGE_NAME}:${IMAGE_TAG} cloud-controller-manager image for external cloud-provider-cluster"
-        echo "Will use the ${IMAGE_REGISTRY}/${CNM_IMAGE_NAME}:${IMAGE_TAG} cloud-node-manager image for external cloud-provider-azure cluster"
+        # replace 'prow' with 'prow-external-cloud-provider' in the template name if testing out-of-tree
+        export CLUSTER_TEMPLATE="${CLUSTER_TEMPLATE/prow/prow-external-cloud-provider}"
     fi
 
     if [[ "${EXP_MACHINE_POOL:-}" == "true" ]]; then
@@ -104,11 +105,7 @@ select_cluster_template() {
         fi
     fi
 
-    # this requires k8s 1.22+
-    if [[ -n "${TEST_WINDOWS:-}" ]]; then
-        export WINDOWS_WORKER_MACHINE_COUNT="${WINDOWS_WORKER_MACHINE_COUNT:-2}"
-        export K8S_FEATURE_GATES="WindowsHostProcessContainers=true"
-    fi
+    echo "Using cluster template: ${CLUSTER_TEMPLATE}"
 }
 
 create_cluster() {
