@@ -19,6 +19,7 @@ package v1beta1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/errors"
@@ -90,19 +91,7 @@ type (
 
 		// Network Interfaces to attach to the to a virtual machine
 		// +optional
-		NetworkInterfaces []AzureNetworkInterface `json:"networkInterfaces,omitempty"`
-	}
-
-	AzureNetworkInterface struct {
-		SubnetName            string          `json:"subnetName,omitempty"`
-		IpConfigs             []AzureIPConfig `json:"ipConfigs,omitempty"`
-		AcceleratedNetworking *bool           `json:"acceleratedNetworking,omitempty"`
-	}
-
-	AzureIPConfig struct {
-		PrivateIP       string `json:"privateIP,omitempty"`
-		PublicIP        bool   `json:"publicIP,omitempty"`
-		PublicIPAddress string `json:"publicIPAddress,omitempty"`
+		NetworkInterfaces []v1beta1.AzureNetworkInterface `json:"networkInterfaces,omitempty"`
 	}
 
 	// AzureMachinePoolSpec defines the desired state of AzureMachinePool.

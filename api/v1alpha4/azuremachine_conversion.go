@@ -39,15 +39,19 @@ func (src *AzureMachine) ConvertTo(dstRaw conversion.Hub) error {
 	if restored.Spec.NetworkInterfaces != nil {
 		dst.Spec.NetworkInterfaces = restored.Spec.NetworkInterfaces
 	}
-
 	return nil
-	//return Convert_v1alpha4_AzureMachine_To_v1beta1_AzureMachine(src, dst, nil)
 }
 
 // ConvertFrom converts from the Hub version (v1beta1) to this version.
 func (dst *AzureMachine) ConvertFrom(srcRaw conversion.Hub) error {
 	src := srcRaw.(*v1beta1.AzureMachine)
-	return Convert_v1beta1_AzureMachine_To_v1alpha4_AzureMachine(src, dst, nil)
+	if err := Convert_v1beta1_AzureMachine_To_v1alpha4_AzureMachine(src, dst, nil); err != nil {
+		return err
+	}
+	if err := utilconversion.MarshalData(src, dst); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ConvertTo converts this AzureMachineList to the Hub version (v1beta1).

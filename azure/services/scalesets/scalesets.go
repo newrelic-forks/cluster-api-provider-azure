@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-11-01/compute"
@@ -432,37 +433,13 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 			},
 			Overprovision: to.BoolPtr(false),
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
+				NetworkProfile:  &compute.VirtualMachineScaleSetNetworkProfile{},
 				OsProfile:       osProfile,
 				StorageProfile:  storageProfile,
 				SecurityProfile: securityProfile,
 				DiagnosticsProfile: &compute.DiagnosticsProfile{
 					BootDiagnostics: &compute.BootDiagnostics{
 						Enabled: to.BoolPtr(true),
-					},
-				},
-				NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
-					NetworkInterfaceConfigurations: &[]compute.VirtualMachineScaleSetNetworkConfiguration{
-						{
-							Name: to.StringPtr(vmssSpec.Name),
-							VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-								Primary:            to.BoolPtr(true),
-								EnableIPForwarding: to.BoolPtr(true),
-								IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
-									{
-										Name: to.StringPtr(vmssSpec.Name),
-										VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-											Subnet: &compute.APIEntityReference{
-												ID: to.StringPtr(azure.SubnetID(s.Scope.SubscriptionID(), vmssSpec.VNetResourceGroup, vmssSpec.VNetName, vmssSpec.SubnetName)),
-											},
-											Primary:                         to.BoolPtr(true),
-											PrivateIPAddressVersion:         compute.IPVersionIPv4,
-											LoadBalancerBackendAddressPools: &backendAddressPools,
-										},
-									},
-								},
-								EnableAcceleratedNetworking: vmssSpec.AcceleratedNetworking,
-							},
-						},
 					},
 				},
 				Priority:       priority,
@@ -475,20 +452,25 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 		},
 	}
 
-	// use custom NIC definitons in VMSS
+	// Use custom NIC definitons in VMSS if set
 	if len(vmssSpec.NetworkInterfaces) > 0 {
 		nicConfigs := []compute.VirtualMachineScaleSetNetworkConfiguration{}
 		for i, n := range vmssSpec.NetworkInterfaces {
 			nicConfig := compute.VirtualMachineScaleSetNetworkConfiguration{}
+			nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties = &compute.VirtualMachineScaleSetNetworkConfigurationProperties{}
+			nicConfig.Name = to.StringPtr(vmssSpec.Name + "-" + strconv.Itoa(i))
 			if n.Id != "" {
 				nicConfig.ID = &n.Id
-				nicConfig.Name = to.StringPtr(vmssSpec.Name + "-" + string(i))
 			} else {
-				nicConfig.EnableAcceleratedNetworking = n.AcceleratedNetworking
+				if to.Bool(n.AcceleratedNetworking) {
+					nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.EnableAcceleratedNetworking = to.BoolPtr(true)
+				} else {
+					nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.EnableAcceleratedNetworking = to.BoolPtr(false)
+				}
 				if len(n.IpConfigs) == 0 {
-					nicConfig.IPConfigurations = &[]compute.VirtualMachineScaleSetIPConfiguration{
+					nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations = &[]compute.VirtualMachineScaleSetIPConfiguration{
 						{
-							Name: to.StringPtr(vmssSpec.Name + "-" + string(i)),
+							Name: to.StringPtr(vmssSpec.Name + "-" + strconv.Itoa(i)),
 							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 								Subnet: &compute.APIEntityReference{
 									ID: to.StringPtr(azure.SubnetID(s.Scope.SubscriptionID(), vmssSpec.VNetResourceGroup, vmssSpec.VNetName, n.SubnetName)),
@@ -513,17 +495,40 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 						}
 						ipconfigs = append(ipconfigs, ipconfig)
 					}
-					nicConfig.IPConfigurations = &ipconfigs
+					nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations = &ipconfigs
 				}
 			}
 			if i == 0 {
-				nicConfig.Primary = to.BoolPtr(true)
+				nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.Primary = to.BoolPtr(true)
 			}
 			nicConfigs = append(nicConfigs, nicConfig)
 		}
 		vmss.VirtualMachineScaleSetProperties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = &nicConfigs
 	} else {
-		// TODO: setup default interface here
+		// Set default interface configuration if no custom ones are specified
+		vmss.VirtualMachineScaleSetProperties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = &[]compute.VirtualMachineScaleSetNetworkConfiguration{
+			{
+				Name: to.StringPtr(vmssSpec.Name),
+				VirtualMachineScaleSetNetworkConfigurationProperties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
+					Primary:            to.BoolPtr(true),
+					EnableIPForwarding: to.BoolPtr(true),
+					IPConfigurations: &[]compute.VirtualMachineScaleSetIPConfiguration{
+						{
+							Name: to.StringPtr(vmssSpec.Name),
+							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
+								Subnet: &compute.APIEntityReference{
+									ID: to.StringPtr(azure.SubnetID(s.Scope.SubscriptionID(), vmssSpec.VNetResourceGroup, vmssSpec.VNetName, vmssSpec.SubnetName)),
+								},
+								Primary:                         to.BoolPtr(true),
+								PrivateIPAddressVersion:         compute.IPVersionIPv4,
+								LoadBalancerBackendAddressPools: &backendAddressPools,
+							},
+						},
+					},
+					EnableAcceleratedNetworking: vmssSpec.AcceleratedNetworking,
+				},
+			},
+		}
 	}
 
 	// Assign Identity to VMSS
