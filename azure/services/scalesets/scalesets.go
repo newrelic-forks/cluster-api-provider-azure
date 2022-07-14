@@ -532,7 +532,7 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 					}
 					if i == 0 {
 						ipconfigs[0].LoadBalancerBackendAddressPools = &backendAddressPools
-						nicConfig.Primary = to.BoolPtr(true)
+						nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.Primary = to.BoolPtr(true)
 					}
 					ipconfigs[0].Primary = to.BoolPtr(true)
 					nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations = &ipconfigs
