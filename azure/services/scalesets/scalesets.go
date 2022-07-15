@@ -516,7 +516,7 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 					// Create any remaining private IPConfigs
 					for j := 0; j < n.PrivateIPConfigs-n.PublicIPConfigs; j++ {
 						ipconfig := compute.VirtualMachineScaleSetIPConfiguration{
-							Name: to.StringPtr(fmt.Sprintf("private-ipConfig%v", j)),
+							Name: to.StringPtr(fmt.Sprintf("private-ipConfig-%v", j)),
 							VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 								PrivateIPAddressVersion: compute.IPVersionIPv4,
 								Subnet: &compute.APIEntityReference{
@@ -532,7 +532,6 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 					}
 					if i == 0 {
 						ipconfigs[0].LoadBalancerBackendAddressPools = &backendAddressPools
-						nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.Primary = to.BoolPtr(true)
 					}
 					ipconfigs[0].Primary = to.BoolPtr(true)
 					nicConfig.VirtualMachineScaleSetNetworkConfigurationProperties.IPConfigurations = &ipconfigs
@@ -540,6 +539,7 @@ func (s *Service) buildVMSSFromSpec(ctx context.Context, vmssSpec azure.ScaleSet
 			}
 			nicConfigs = append(nicConfigs, nicConfig)
 		}
+		nicConfigs[0].VirtualMachineScaleSetNetworkConfigurationProperties.Primary = to.BoolPtr(true)
 		vmss.VirtualMachineScaleSetProperties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations = &nicConfigs
 	} else {
 		// Set default interface configuration if no custom ones are specified
