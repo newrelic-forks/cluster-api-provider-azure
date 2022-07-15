@@ -288,12 +288,12 @@ func TestReconcileVMSS(t *testing.T) {
 				(*netConfigs)[0].Name = to.StringPtr("my-vmss-0")
 				(*netConfigs)[0].EnableIPForwarding = nil
 				nic1IPConfigs := (*netConfigs)[0].IPConfigurations
-				(*nic1IPConfigs)[0].Name = to.StringPtr("private-ipConfig0")
+				(*nic1IPConfigs)[0].Name = to.StringPtr("private-ipConfig-0")
 				(*nic1IPConfigs)[0].PrivateIPAddressVersion = compute.IPVersionIPv4
 				(*netConfigs)[0].EnableAcceleratedNetworking = to.BoolPtr(true)
 				vmssIPConfigs := []compute.VirtualMachineScaleSetIPConfiguration{
 					{
-						Name: to.StringPtr("private-ipConfig0"),
+						Name: to.StringPtr("private-ipConfig-0"),
 						VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 							Primary:                 to.BoolPtr(true),
 							PrivateIPAddressVersion: compute.IPVersionIPv4,
@@ -303,7 +303,7 @@ func TestReconcileVMSS(t *testing.T) {
 						},
 					},
 					{
-						Name: to.StringPtr("private-ipConfig1"),
+						Name: to.StringPtr("private-ipConfig-1"),
 						VirtualMachineScaleSetIPConfigurationProperties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 							Primary:                 to.BoolPtr(false),
 							PrivateIPAddressVersion: compute.IPVersionIPv4,
