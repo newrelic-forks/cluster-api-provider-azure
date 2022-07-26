@@ -62,7 +62,7 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	defer done()
 
 	for _, ip := range s.Scope.PublicIPSpecs() {
-		log.V(2).Info("creating public IP", "public ip", ip.Name)
+		log.Info("creating public IP", "public ip", ip.Name)
 
 		// only set DNS properties if there is a DNS name specified
 		addressVersion := network.IPVersionIPv4
@@ -77,36 +77,41 @@ func (s *Service) Reconcile(ctx context.Context) error {
 				DomainNameLabel: to.StringPtr(strings.Split(ip.DNSName, ".")[0]),
 				Fqdn:            to.StringPtr(ip.DNSName),
 			}
+			log.Info("cf debug", "dnsSettings", dnsSettings)
 		}
+
+		toUpdate := network.PublicIPAddress{
+			Tags: converters.TagsToMap(infrav1.Build(infrav1.BuildParams{
+				ClusterName: s.Scope.ClusterName(),
+				Lifecycle:   infrav1.ResourceLifecycleOwned,
+				Name:        to.StringPtr(ip.Name),
+				Additional:  s.Scope.AdditionalTags(),
+			})),
+			Sku:      &network.PublicIPAddressSku{Name: network.PublicIPAddressSkuNameStandard},
+			Name:     to.StringPtr(ip.Name),
+			Location: to.StringPtr(s.Scope.Location()),
+			PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
+				PublicIPAddressVersion:   addressVersion,
+				PublicIPAllocationMethod: network.IPAllocationMethodStatic,
+				DNSSettings:              dnsSettings,
+			},
+			Zones: to.StringSlicePtr(s.Scope.FailureDomains()),
+		}
+
+		log.Info("cf debug", "PublicIPAddress", toUpdate)
 
 		err := s.Client.CreateOrUpdate(
 			ctx,
 			s.Scope.ResourceGroup(),
 			ip.Name,
-			network.PublicIPAddress{
-				Tags: converters.TagsToMap(infrav1.Build(infrav1.BuildParams{
-					ClusterName: s.Scope.ClusterName(),
-					Lifecycle:   infrav1.ResourceLifecycleOwned,
-					Name:        to.StringPtr(ip.Name),
-					Additional:  s.Scope.AdditionalTags(),
-				})),
-				Sku:      &network.PublicIPAddressSku{Name: network.PublicIPAddressSkuNameStandard},
-				Name:     to.StringPtr(ip.Name),
-				Location: to.StringPtr(s.Scope.Location()),
-				PublicIPAddressPropertiesFormat: &network.PublicIPAddressPropertiesFormat{
-					PublicIPAddressVersion:   addressVersion,
-					PublicIPAllocationMethod: network.IPAllocationMethodStatic,
-					DNSSettings:              dnsSettings,
-				},
-				Zones: to.StringSlicePtr(s.Scope.FailureDomains()),
-			},
+			toUpdate,
 		)
 
 		if err != nil {
 			return errors.Wrap(err, "cannot create public IP")
 		}
 
-		log.V(2).Info("successfully created public IP", "public ip", ip.Name)
+		log.Info("successfully created public IP", "public ip", ip.Name)
 	}
 
 	return nil
