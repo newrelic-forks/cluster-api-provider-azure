@@ -49,8 +49,10 @@ type (
 		ScaleSetSpec() azure.ScaleSetSpec
 		VMSSExtensionSpecs() []azure.ResourceSpecGetter
 		SetAnnotation(string, string)
+		GetAnnotation(string) (string, bool)
 		SetProviderID(string)
 		SetVMSSState(*azure.VMSS)
+		UpdateScaleSetReplicas(context.Context, *azure.VMSS) error
 	}
 
 	// Service provides operations on Azure resources.
@@ -128,6 +130,16 @@ func (s *Service) Reconcile(ctx context.Context) (retErr error) {
 		}
 	case err == nil:
 		// HTTP(200)
+		if s.replicasManagedByAutoscaler() {
+			if fetchedVMSS.Capacity != s.Scope.ScaleSetSpec().Capacity {
+				err := s.Scope.UpdateScaleSetReplicas(ctx, fetchedVMSS)
+				if err != nil {
+					return errors.Wrap(err, "failed to update MachinePool Replicas")
+				}
+				log.Info("Updated MachinePool Replicas, requeing", "AzureMachinePool", scaleSetSpec.Name, "ScaleSetCapacity", scaleSetSpec.Capacity, "fetchedVMSSCapacity", fetchedVMSS.Capacity)
+				return nil
+			}
+		}
 		// VMSS already exists and may have changes; update it with a PATCH
 		// we do this to avoid overwriting fields in networkProfile modified by cloud-provider
 		future, err = s.patchVMSSIfNeeded(ctx, fetchedVMSS)
@@ -152,6 +164,15 @@ func (s *Service) Reconcile(ctx context.Context) (retErr error) {
 	s.Scope.UpdatePutStatus(infrav1.BootstrapSucceededCondition, serviceName, nil)
 
 	return nil
+}
+
+// replicasManagedByAutoscaler checks if the replica count of AzureMachinePool is managed by autoscaler
+func (s *Service) replicasManagedByAutoscaler() bool {
+	if value, _ := s.Scope.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation); value == "true" {
+		return true
+	}
+
+	return false
 }
 
 // Delete deletes a scale set asynchronously. Delete sends a DELETE request to Azure and if accepted without error,
@@ -270,11 +291,19 @@ func (s *Service) patchVMSSIfNeeded(ctx context.Context, infraVMSS *azure.VMSS) 
 		patch.Sku.Capacity = to.Int64Ptr(surge)
 	}
 
+	if s.replicasManagedByAutoscaler() {
+		hasModelChanges = true
+	}
+
 	// If there are no model changes and no increase in the replica count, do not update the VMSS.
 	// Decreases in replica count is handled by deleting AzureMachinePoolMachine instances in the MachinePoolScope
 	if *patch.Sku.Capacity <= infraVMSS.Capacity && !hasModelChanges {
 		log.V(4).Info("nothing to update on vmss", "scale set", spec.Name, "newReplicas", *patch.Sku.Capacity, "oldReplicas", infraVMSS.Capacity, "hasChanges", hasModelChanges)
 		return nil, nil
+	}
+
+	if s.replicasManagedByAutoscaler() {
+		patch.Sku.Capacity = nil
 	}
 
 	log.V(4).Info("patching vmss", "scale set", spec.Name, "patch", patch)

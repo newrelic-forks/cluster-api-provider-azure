@@ -206,6 +206,21 @@ func (mr *MockScaleSetScopeMockRecorder) FailureDomains() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailureDomains", reflect.TypeOf((*MockScaleSetScope)(nil).FailureDomains))
 }
 
+// GetAnnotation mocks base method.
+func (m *MockScaleSetScope) GetAnnotation(arg0 string) (string, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAnnotation", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetAnnotation indicates an expected call of GetAnnotation.
+func (mr *MockScaleSetScopeMockRecorder) GetAnnotation(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAnnotation", reflect.TypeOf((*MockScaleSetScope)(nil).GetAnnotation), arg0)
+}
+
 // GetBootstrapData mocks base method.
 func (m *MockScaleSetScope) GetBootstrapData(arg0 context.Context) (string, error) {
 	m.ctrl.T.Helper()
@@ -443,6 +458,20 @@ func (m *MockScaleSetScope) UpdatePutStatus(arg0 v1beta10.ConditionType, arg1 st
 func (mr *MockScaleSetScopeMockRecorder) UpdatePutStatus(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePutStatus", reflect.TypeOf((*MockScaleSetScope)(nil).UpdatePutStatus), arg0, arg1, arg2)
+}
+
+// UpdateScaleSetReplicas mocks base method.
+func (m *MockScaleSetScope) UpdateScaleSetReplicas(arg0 context.Context, arg1 *azure.VMSS) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateScaleSetReplicas", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateScaleSetReplicas indicates an expected call of UpdateScaleSetReplicas.
+func (mr *MockScaleSetScopeMockRecorder) UpdateScaleSetReplicas(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateScaleSetReplicas", reflect.TypeOf((*MockScaleSetScope)(nil).UpdateScaleSetReplicas), arg0, arg1)
 }
 
 // VMSSExtensionSpecs mocks base method.
