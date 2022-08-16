@@ -310,25 +310,25 @@ func (m *MachinePoolScope) applyAzureMachinePoolMachines(ctx context.Context) er
 	if _, ok := m.AzureMachinePool.Annotations[azure.ReplicasManagedByAutoscalerAnnotation]; ok {
 		log.V(4).Info("Avoiding AzureMachinePoolMachine Deleteion")
 		return nil
-	} else {
-		deleteSelector := m.getDeploymentStrategy()
-		if deleteSelector == nil {
-			log.V(4).Info("can not select AzureMachinePoolMachines to delete because no deployment strategy is specified")
-			return nil
-		}
+	}
 
-		// select machines to delete to lower the replica count
-		toDelete, err := deleteSelector.SelectMachinesToDelete(ctx, m.DesiredReplicas(), existingMachinesByProviderID)
-		if err != nil {
-			return errors.Wrap(err, "failed selecting AzureMachinePoolMachine(s) to delete")
-		}
+	deleteSelector := m.getDeploymentStrategy()
+	if deleteSelector == nil {
+		log.V(4).Info("can not select AzureMachinePoolMachines to delete because no deployment strategy is specified")
+		return nil
+	}
 
-		for _, machine := range toDelete {
-			machine := machine
-			log.Info("deleting selected AzureMachinePoolMachine", "providerID", machine.Spec.ProviderID)
-			if err := m.client.Delete(ctx, &machine); err != nil {
-				return errors.Wrap(err, "failed deleting AzureMachinePoolMachine to reduce replica count")
-			}
+	// select machines to delete to lower the replica count
+	toDelete, err := deleteSelector.SelectMachinesToDelete(ctx, m.DesiredReplicas(), existingMachinesByProviderID)
+	if err != nil {
+		return errors.Wrap(err, "failed selecting AzureMachinePoolMachine(s) to delete")
+	}
+
+	for _, machine := range toDelete {
+		machine := machine
+		log.Info("deleting selected AzureMachinePoolMachine", "providerID", machine.Spec.ProviderID)
+		if err := m.client.Delete(ctx, &machine); err != nil {
+			return errors.Wrap(err, "failed deleting AzureMachinePoolMachine to reduce replica count")
 		}
 	}
 
@@ -495,7 +495,7 @@ func (m *MachinePoolScope) SetAnnotation(key, value string) {
 	m.AzureMachinePool.Annotations[key] = value
 }
 
-// GetAnnotation retrives annotations from AzureMachinePool
+// GetAnnotation retrives annotations from AzureMachinePool.
 func (m *MachinePoolScope) GetAnnotation(key string) (string, bool) {
 	if m.AzureMachinePool.Annotations == nil {
 		return "", false

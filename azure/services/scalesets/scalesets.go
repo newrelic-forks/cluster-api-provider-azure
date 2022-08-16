@@ -166,7 +166,7 @@ func (s *Service) Reconcile(ctx context.Context) (retErr error) {
 	return nil
 }
 
-// replicasManagedByAutoscaler checks if the replica count of AzureMachinePool is managed by autoscaler
+// replicasManagedByAutoscaler checks if the replica count of AzureMachinePool is managed by autoscaler.
 func (s *Service) replicasManagedByAutoscaler() bool {
 	if value, _ := s.Scope.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation); value == "true" {
 		return true
