@@ -28,4 +28,8 @@ const (
 	// See https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 	// for annotation formatting rules.
 	RGTagsLastAppliedAnnotation = "sigs.k8s.io/cluster-api-provider-azure-last-applied-tags-rg"
+
+	// ReplicasManagedByAutoscalerAnnotation is the key for the AzureMachinePool Object annotation
+	// which signals that the underlying VMSS replicas are not controlled by CAPZ.
+	ReplicasManagedByAutoscalerAnnotation = "cluster.x-k8s.io/replicas-managed-by-autoscaler"
 )

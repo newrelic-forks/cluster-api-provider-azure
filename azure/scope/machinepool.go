@@ -257,6 +257,7 @@ func (m *MachinePoolScope) applyAzureMachinePoolMachines(ctx context.Context) er
 		clusterv1.ClusterLabelName:      m.ClusterName(),
 		infrav1exp.MachinePoolNameLabel: m.AzureMachinePool.Name,
 	}
+
 	ampml := &infrav1exp.AzureMachinePoolMachineList{}
 	if err := m.client.List(ctx, ampml, client.InNamespace(m.AzureMachinePool.Namespace), client.MatchingLabels(labels)); err != nil {
 		return errors.Wrap(err, "failed to list AzureMachinePoolMachines")
@@ -302,6 +303,12 @@ func (m *MachinePoolScope) applyAzureMachinePoolMachines(ctx context.Context) er
 	if futures.Has(m.AzureMachinePool, m.Name(), ScalesetsServiceName) {
 		log.V(4).Info("exiting early due an in-progress long running operation on the ScaleSet")
 		// exit early to be less greedy about delete
+		return nil
+	}
+
+	// checking AzureMachinePool Annoations for ReplicasManagedByAutoscalerAnnotation
+	if _, ok := m.AzureMachinePool.Annotations[azure.ReplicasManagedByAutoscalerAnnotation]; ok {
+		log.V(4).Info("Avoiding AzureMachinePoolMachine Deleteion")
 		return nil
 	}
 
@@ -488,12 +495,34 @@ func (m *MachinePoolScope) SetAnnotation(key, value string) {
 	m.AzureMachinePool.Annotations[key] = value
 }
 
+// GetAnnotation retrives annotations from AzureMachinePool.
+func (m *MachinePoolScope) GetAnnotation(key string) (string, bool) {
+	if m.AzureMachinePool.Annotations == nil {
+		return "", false
+	}
+	value, ok := m.AzureMachinePool.Annotations[key]
+	return value, ok
+}
+
 // PatchObject persists the machine spec and status.
 func (m *MachinePoolScope) PatchObject(ctx context.Context) error {
 	ctx, _, done := tele.StartSpanWithLogger(ctx, "scope.MachinePoolScope.PatchObject")
 	defer done()
 
 	return m.patchHelper.Patch(ctx, m.AzureMachinePool)
+}
+
+// UpdateScaleSetReplicas patches the AzureMachinePool Spec with the correct Replica count.
+func (m *MachinePoolScope) UpdateScaleSetReplicas(ctx context.Context, fetchedVMSS *azure.VMSS) error {
+	helper, err := patch.NewHelper(m.MachinePool, m.client)
+	if err != nil {
+		return errors.Wrap(err, "failed to init patch helper")
+	}
+
+	capacity := int32(fetchedVMSS.Capacity)
+	m.MachinePool.Spec.Replicas = &capacity
+
+	return helper.Patch(ctx, m.MachinePool)
 }
 
 // Close the MachineScope by updating the machine spec, machine status.

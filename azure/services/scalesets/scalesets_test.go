@@ -220,6 +220,8 @@ func TestReconcileVMSS(t *testing.T) {
 				instances := newDefaultInstances()
 
 				setupDefaultVMSSInProgressOperationDoneExpectations(s, m, createdVMSS, instances)
+				s.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation).Return("", false)
+				s.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation).Return("", false)
 				s.DeleteLongRunningOperationState(defaultSpec.Name, serviceName)
 				s.UpdatePutStatus(infrav1.BootstrapSucceededCondition, serviceName, nil)
 			},
@@ -234,6 +236,8 @@ func TestReconcileVMSS(t *testing.T) {
 				instances := newDefaultInstances()
 
 				setupDefaultVMSSInProgressOperationDoneExpectations(s, m, createdVMSS, instances)
+				s.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation).Return("", false)
+				s.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation).Return("", false)
 				s.DeleteLongRunningOperationState(defaultSpec.Name, serviceName)
 				s.UpdatePutStatus(infrav1.BootstrapSucceededCondition, serviceName, nil)
 			},
@@ -513,6 +517,9 @@ func TestReconcileVMSS(t *testing.T) {
 				g.Expect(err).NotTo(HaveOccurred())
 				patchVMSS.VirtualMachineProfile.StorageProfile.ImageReference.Version = to.StringPtr("2.0")
 				patchVMSS.VirtualMachineProfile.NetworkProfile = nil
+				s.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation).Return("", false)
+				s.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation).Return("", false)
+				s.GetAnnotation(azure.ReplicasManagedByAutoscalerAnnotation).Return("", false)
 				m.UpdateAsync(gomockinternal.AContext(), defaultResourceGroup, defaultVMSSName, gomockinternal.DiffEq(patchVMSS)).
 					Return(patchFuture, nil)
 				s.SetLongRunningOperationState(patchFuture)
