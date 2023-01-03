@@ -236,12 +236,12 @@ func (s *MachinePoolMachineScope) IsReady() bool {
 
 // SetFailureMessage sets the AzureMachinePoolMachine status failure message.
 func (s *MachinePoolMachineScope) SetFailureMessage(v error) {
-	s.AzureMachinePool.Status.FailureMessage = pointer.StringPtr(v.Error())
+	s.AzureMachinePoolMachine.Status.FailureMessage = pointer.StringPtr(v.Error())
 }
 
 // SetFailureReason sets the AzureMachinePoolMachine status failure reason.
 func (s *MachinePoolMachineScope) SetFailureReason(v capierrors.MachineStatusError) {
-	s.AzureMachinePool.Status.FailureReason = &v
+	s.AzureMachinePoolMachine.Status.FailureReason = &v
 }
 
 // ProviderID returns the AzureMachinePool ID by parsing Spec.FakeProviderID.
@@ -481,10 +481,12 @@ func (s *MachinePoolMachineScope) hasLatestModelApplied(ctx context.Context) (bo
 	)
 	defer done()
 
+
+
 	if s.instance == nil {
 		return false, errors.New("instance must not be nil")
 	}
-
+	
 	image, err := s.MachinePoolScope.GetVMImage(ctx)
 	if err != nil {
 		return false, errors.Wrap(err, "unable to build vm image information from MachinePoolScope")
@@ -495,6 +497,14 @@ func (s *MachinePoolMachineScope) hasLatestModelApplied(ctx context.Context) (bo
 		return false, errors.New("machinepoolscope image must not be nil")
 	}
 
+	// check if this is costume image from compute gallery and make sure to compare proper struct
+  if image.ComputeGallery != nil {
+    return reflect.DeepEqual(*s.instance.Image.ComputeGallery, *image.ComputeGallery), nil
+	}
+
+	if image.SharedGallery != nil {
+    return reflect.DeepEqual(*s.instance.Image.SharedGallery, *image.SharedGallery), nil
+	}
 	// if the images match, then the VM is of the same model
 	return reflect.DeepEqual(s.instance.Image, *image), nil
 }

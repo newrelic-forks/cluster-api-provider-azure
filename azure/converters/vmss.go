@@ -17,10 +17,14 @@ limitations under the License.
 package converters
 
 import (
+	"errors"
+	"strings"
+
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-11-01/compute"
 	"github.com/Azure/go-autorest/autorest/to"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // SDKToVMSS converts an Azure SDK VirtualMachineScaleSet to the AzureMachinePool type.
@@ -96,16 +100,43 @@ func SDKToVMSSVM(sdkInstance compute.VirtualMachineScaleSetVM) *azure.VMSSVM {
 
 // SDKImageToImage converts a SDK image reference to infrav1.Image.
 func SDKImageToImage(sdkImageRef *compute.ImageReference, isThirdPartyImage bool) infrav1.Image {
-	return infrav1.Image{
-		ID: sdkImageRef.ID,
-		Marketplace: &infrav1.AzureMarketplaceImage{
-			ImagePlan: infrav1.ImagePlan{
-				Publisher: to.String(sdkImageRef.Publisher),
-				Offer:     to.String(sdkImageRef.Offer),
-				SKU:       to.String(sdkImageRef.Sku),
-			},
-			Version:         to.String(sdkImageRef.Version),
-			ThirdPartyImage: isThirdPartyImage,
-		},
-	}
+	imgId := to.String(sdkImageRef.ID)
+	var infraImg infrav1.Image
+	switch imgId {
+  case "":
+		infraImg = infrav1.Image{
+			ID:&imgId,
+				Marketplace: &infrav1.AzureMarketplaceImage{
+					ImagePlan: infrav1.ImagePlan{
+						Publisher: to.String(sdkImageRef.Publisher),
+						Offer:     to.String(sdkImageRef.Offer),
+						SKU:       to.String(sdkImageRef.Sku),
+					},
+					Version:         to.String(sdkImageRef.Version),
+					ThirdPartyImage: isThirdPartyImage,
+				},
+		}
+	//for now we assume if there is an image id it is custom image from compute gallery
+	default:
+		si:= strings.Split(imgId, "/")
+		if si[6] == "Microsoft.Compute" && si[7] == "galleries"{
+			gallery := si[8]
+			image := si[10]
+			version := si[12]
+			subId := si[2]
+			rgName := si[4]
+
+			infraImg = infrav1.Image{
+				ID:&imgId,
+					ComputeGallery: &infrav1.AzureComputeGalleryImage{
+						Gallery: gallery,
+						Name: image,
+						Version: version,
+						ResourceGroup: &rgName,
+						SubscriptionID: &subId,
+					},
+			}
+    }else {log.Log.Error(errors.New("Failed in vmss.go"), "SDKImageToImage default case did not find Microsoft.Compute or galleries in the id")}
+  }
+	return infraImg
 }

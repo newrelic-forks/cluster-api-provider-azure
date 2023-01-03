@@ -577,6 +577,7 @@ func (m *MachinePoolScope) GetVMImage(ctx context.Context) (*infrav1.Image, erro
 		return m.AzureMachinePool.Spec.Template.Image, nil
 	}
 
+
 	svc := virtualmachineimages.New(m)
 
 	var (
