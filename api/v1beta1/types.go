@@ -651,6 +651,9 @@ type NetworkInterface struct {
 	// +kubebuilder:validation:nullable
 	// +optional
 	AcceleratedNetworking *bool `json:"acceleratedNetworking,omitempty"`
+
+	// ID specifies the Azure resource ID of an existing Azure Network Interface to attach to the VirtualMachine
+	ID string `json:"id,omitempty"`
 }
 
 // GetControlPlaneSubnet returns the cluster control plane subnet.
