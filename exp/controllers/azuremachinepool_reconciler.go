@@ -60,6 +60,9 @@ func (s *azureMachinePoolService) Reconcile(ctx context.Context) error {
 	// Ensure that the deprecated networking field values have been migrated to the new NetworkInterfaces field.
 	s.scope.AzureMachinePool.SetNetworkInterfacesDefaults()
 
+	// Ensure that the new Diagnostics field has been defaulted in case of a cluster upgraded from a version prior to that field existing
+	s.scope.AzureMachinePool.SetDiagnosticsDefaults()
+
 	if err := s.scope.SetSubnetName(); err != nil {
 		return errors.Wrap(err, "failed defaulting subnet name")
 	}
