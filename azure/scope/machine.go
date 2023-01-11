@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"os"
 	"strings"
 	"time"
 
@@ -234,6 +235,11 @@ func (m *MachineScope) NICSpecs() []azure.ResourceSpecGetter {
 	// For backwards compatibility we need to ensure the NIC Name does not change on existing machines
 	// created prior to multiple NIC support
 	isMultiNIC := len(m.AzureMachine.Spec.NetworkInterfaces) > 1
+
+	// Temporary workaround for upgrading clusters on the original fork
+	if os.Getenv("CAPZ_LEGACY_FORK_CLUSTER") == "true" {
+		isMultiNIC = true
+	}
 
 	for i := 0; i < len(m.AzureMachine.Spec.NetworkInterfaces); i++ {
 		if m.AzureMachine.Spec.NetworkInterfaces[i].ID != "" {
