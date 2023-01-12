@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
 	"sigs.k8s.io/cluster-api-provider-azure/azure/services/async"
 	"sigs.k8s.io/cluster-api-provider-azure/util/tele"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 const serviceName = "agentpools"
@@ -85,10 +84,10 @@ func (s *Service) Reconcile(ctx context.Context) error {
 			}
 			// When autoscaling is set, add the annotation to the machine pool and update the replica count.
 			if to.Bool(agentPool.EnableAutoScaling) {
-				s.scope.SetCAPIMachinePoolAnnotation(clusterv1.ReplicasManagedByAnnotation, "true")
+				s.scope.SetCAPIMachinePoolAnnotation(azure.ReplicasManagedByAutoscalerAnnotation, "true")
 				s.scope.SetCAPIMachinePoolReplicas(agentPool.Count)
 			} else { // Otherwise, remove the annotation.
-				s.scope.RemoveCAPIMachinePoolAnnotation(clusterv1.ReplicasManagedByAnnotation)
+				s.scope.RemoveCAPIMachinePoolAnnotation(azure.ReplicasManagedByAutoscalerAnnotation)
 			}
 		}
 	} else {
