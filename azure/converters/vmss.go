@@ -17,7 +17,7 @@ limitations under the License.
 package converters
 
 import (
-	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-11-01/compute"
@@ -102,41 +102,101 @@ func SDKToVMSSVM(sdkInstance compute.VirtualMachineScaleSetVM) *azure.VMSSVM {
 func SDKImageToImage(sdkImageRef *compute.ImageReference, isThirdPartyImage bool) infrav1.Image {
 	imgId := to.String(sdkImageRef.ID)
 	var infraImg infrav1.Image
-	switch imgId {
-  case "":
-		infraImg = infrav1.Image{
-			ID:&imgId,
-				Marketplace: &infrav1.AzureMarketplaceImage{
-					ImagePlan: infrav1.ImagePlan{
-						Publisher: to.String(sdkImageRef.Publisher),
-						Offer:     to.String(sdkImageRef.Offer),
-						SKU:       to.String(sdkImageRef.Sku),
-					},
-					Version:         to.String(sdkImageRef.Version),
-					ThirdPartyImage: isThirdPartyImage,
-				},
-		}
-	//for now we assume if there is an image id it is custom image from compute gallery
-	default:
-		si:= strings.Split(imgId, "/")
-		if si[6] == "Microsoft.Compute" && si[7] == "galleries"{
-			gallery := si[8]
-			image := si[10]
-			version := si[12]
-			subId := si[2]
-			rgName := si[4]
+	var marketImg infrav1.AzureMarketplaceImage
+	var computeImg infrav1.AzureComputeGalleryImage
 
-			infraImg = infrav1.Image{
-				ID:&imgId,
-					ComputeGallery: &infrav1.AzureComputeGalleryImage{
-						Gallery: gallery,
-						Name: image,
-						Version: version,
-						ResourceGroup: &rgName,
-						SubscriptionID: &subId,
-					},
+  if imgId == "" {
+		marketImg = infrav1.AzureMarketplaceImage{
+			ImagePlan:       infrav1.ImagePlan{
+				Publisher: to.String(sdkImageRef.Publisher),
+				Offer:     to.String(sdkImageRef.Offer),
+				SKU:       to.String(sdkImageRef.Sku),
+			},
+			Version:         to.String(sdkImageRef.Version),
+			ThirdPartyImage: isThirdPartyImage,
+		}
+	}else{  //shared galleries are depricated only use compute gallery images with no image plan
+		parts, err := ParseImageID(imgId)
+		if err != nil {
+			log.Log.Error(err, "Failed to parse image id")
+		}
+
+		for i := range(parts) {
+			if strings.EqualFold(parts[i], "subscriptions"){
+				computeImg.SubscriptionID = &parts[i + 1]
 			}
-    }else {log.Log.Error(errors.New("Failed in vmss.go"), "SDKImageToImage default case did not find Microsoft.Compute or galleries in the id")}
-  }
-	return infraImg
+			if strings.EqualFold(parts[i], "resourcegroups"){
+				computeImg.ResourceGroup = &parts[i + 1]
+			}
+			if strings.EqualFold(parts[i], "galleries"){
+				computeImg.Gallery = parts[i + 1]
+			}
+			if strings.EqualFold(parts[i], "images"){
+				computeImg.Name = parts[i + 1]
+			}
+			if strings.EqualFold(parts[i], "versions"){
+				computeImg.Version = parts[i + 1]
+			}
+		}
+	}
+
+	infraImg = infrav1.Image{
+		ID:             &imgId,
+		SharedGallery:  &infrav1.AzureSharedGalleryImage{},
+		Marketplace:    &marketImg,
+		ComputeGallery: &computeImg,
+	}
+
+		return infraImg
+}
+
+// ParseImageID parses a string to an instance of Image
+func ParseImageID(id string) ([]string, error) {
+	if len(id) == 0 {
+		return nil, fmt.Errorf("invalid resource ID: id cannot be empty")
+	}
+
+	if !strings.HasPrefix(id, "/") {
+		return nil, fmt.Errorf("invalid resource ID: resource id '%s' must start with '/'", id)
+	}
+
+	parts := splitStringAndOmitEmpty(id, "/")
+
+	if len(parts) < 12 {
+		return nil, fmt.Errorf("invalid resource ID: %s", id)
+	}
+
+	if !strings.EqualFold(parts[5], "Microsoft.Compute") || !strings.EqualFold(parts[6], "galleries"){
+		return nil, fmt.Errorf("invalid image id type we only accept Microsoft.Compute/galleries %s", id)
+	}
+
+	if !strings.EqualFold(parts[0], "subscriptions") || parts[1] == "" {
+		return nil, fmt.Errorf("invalid image ID subscription keyword or subscription is empty: %s", id)
+	}
+
+	if !strings.EqualFold(parts[2], "resourcegroups") || parts[3] == "" {
+		return nil, fmt.Errorf("invalid image ID rg keyword missing or rg is empty: %s", id)
+	}
+
+	if !strings.EqualFold(parts[4], "providers"){
+		return nil, fmt.Errorf("invalid image ID providers keyword missing: %s", id)
+	}
+
+	if !strings.EqualFold(parts[10], "versions") || parts[11] == "" {
+		return nil, fmt.Errorf("invalid image ID versions keyword missing or version is empty %s", id)
+	}
+
+	return parts, nil
+}
+
+func splitStringAndOmitEmpty(v, sep string) []string {
+	r := make([]string, 0)
+	for _, s := range strings.Split(v, sep) {
+		if len(s) == 0 {
+			continue
+		}
+		r = append(r, s)
+	}
+
+	return r
 }
