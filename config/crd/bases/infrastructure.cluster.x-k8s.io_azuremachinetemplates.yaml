@@ -451,6 +451,11 @@ spec:
                                 set to true with a VMSize that does not support it,
                                 Azure will return an error.
                               type: boolean
+                            id:
+                              description: ID specifies the Azure resource ID of an
+                                existing Azure Network Interface to attach to the
+                                VirtualMachine
+                              type: string
                             privateIPConfigs:
                               description: PrivateIPConfigs specifies the number of
                                 private IP addresses to attach to the interface. Defaults

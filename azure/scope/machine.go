@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"os"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-11-01/compute"
@@ -236,7 +237,15 @@ func (m *MachineScope) NICSpecs() []azure.ResourceSpecGetter {
 	// created prior to multiple NIC support
 	isMultiNIC := len(m.AzureMachine.Spec.NetworkInterfaces) > 1
 
+	// Temporary workaround for upgrading clusters on the original fork
+	if os.Getenv("CAPZ_LEGACY_FORK_CLUSTER") == "true" {
+		isMultiNIC = true
+	}
+
 	for i := 0; i < len(m.AzureMachine.Spec.NetworkInterfaces); i++ {
+		if m.AzureMachine.Spec.NetworkInterfaces[i].ID != "" {
+			continue
+		}
 		isPrimary := i == 0
 		nicName := azure.GenerateNICName(m.Name(), isMultiNIC, i)
 		nicSpecs = append(nicSpecs, m.BuildNICSpec(nicName, m.AzureMachine.Spec.NetworkInterfaces[i], isPrimary))
@@ -311,6 +320,12 @@ func (m *MachineScope) NICIDs() []string {
 	nicIDs := make([]string, len(nicspecs))
 	for i, nic := range nicspecs {
 		nicIDs[i] = azure.NetworkInterfaceID(m.SubscriptionID(), nic.ResourceGroupName(), nic.ResourceName())
+	}
+
+	for _, nic := range m.AzureMachine.Spec.NetworkInterfaces {
+		if nic.ID != "" {
+			nicIDs = append(nicIDs, nic.ID)
+		}
 	}
 
 	return nicIDs
