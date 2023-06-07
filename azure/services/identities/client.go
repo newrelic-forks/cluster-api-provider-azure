@@ -18,6 +18,7 @@ package identities
 
 import (
 	"context"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/services/msi/mgmt/2018-11-30/msi"
@@ -62,6 +63,9 @@ func (ac *AzureClient) Get(ctx context.Context, resourceGroupName, name string) 
 func (ac *AzureClient) GetClientID(ctx context.Context, providerID string) (string, error) {
 	ctx, _, done := tele.StartSpanWithLogger(ctx, "identities.GetClientID")
 	defer done()
+
+	// trim the azure:// prefix from the providerID if it exists
+	providerID = strings.TrimPrefix(providerID, "azure://")
 
 	parsed, err := arm.ParseResourceID(providerID)
 	if err != nil {
