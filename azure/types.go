@@ -130,6 +130,15 @@ func (vmss VMSS) HasModelChanges(other VMSS) bool {
 	return !equal
 }
 
+// HasRollingUpdateChanges returns true if the spec fields which will mutate the Azure VMSS model are different.
+func (vmss VMSS) HasRollingUpdateChanges(other VMSS) bool {
+	equal := cmp.Equal(vmss.Image, other.Image) &&
+		cmp.Equal(vmss.Identity, other.Identity) &&
+		cmp.Equal(vmss.Zones, other.Zones) &&
+		cmp.Equal(vmss.Sku, other.Sku)
+	return !equal
+}
+
 // InstancesByProviderID returns VMSSVMs by ID.
 func (vmss VMSS) InstancesByProviderID(mode infrav1.OrchestrationModeType) map[string]VMSSVM {
 	instancesByProviderID := make(map[string]VMSSVM, len(vmss.Instances))
