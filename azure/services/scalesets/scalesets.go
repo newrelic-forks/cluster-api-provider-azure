@@ -293,15 +293,16 @@ func (s *Service) patchVMSSIfNeeded(ctx context.Context, infraVMSS *azure.VMSS) 
 	}
 
 	hasModelChanges := hasModelModifyingDifferences(infraVMSS, vmss)
+	needRollingUpdate := hasRollingUpdateDifferences(infraVMSS, vmss)
 	isFlex := s.Scope.ScaleSetSpec().OrchestrationMode == infrav1.FlexibleOrchestrationMode
 	updated := true
 	if !isFlex {
 		updated = infraVMSS.HasEnoughLatestModelOrNotMixedModel()
 	}
-	if maxSurge > 0 && (hasModelChanges || !updated) && !s.Scope.HasReplicasExternallyManaged(ctx) {
+	if maxSurge > 0 && (needRollingUpdate || !updated) && !s.Scope.HasReplicasExternallyManaged(ctx) {
 		// surge capacity with the intention of lowering during instance reconciliation
 		surge := spec.Capacity + int64(maxSurge)
-		log.V(4).Info("surging...", "surge", surge, "hasModelChanges", hasModelChanges, "updated", updated)
+		log.V(4).Info("surging...", "surge", surge, "needRollingUpdate", needRollingUpdate, "updated", updated)
 		patch.Sku.Capacity = pointer.Int64(surge)
 	}
 
@@ -330,6 +331,11 @@ func (s *Service) patchVMSSIfNeeded(ctx context.Context, infraVMSS *azure.VMSS) 
 func hasModelModifyingDifferences(infraVMSS *azure.VMSS, vmss compute.VirtualMachineScaleSet) bool {
 	other := converters.SDKToVMSS(vmss, []compute.VirtualMachineScaleSetVM{})
 	return infraVMSS.HasModelChanges(*other)
+}
+
+func hasRollingUpdateDifferences(infraVMSS *azure.VMSS, vmss compute.VirtualMachineScaleSet) bool {
+	other := converters.SDKToVMSS(vmss, []compute.VirtualMachineScaleSetVM{})
+	return infraVMSS.HasRollingUpdateChanges(*other)
 }
 
 func (s *Service) validateSpec(ctx context.Context) error {
