@@ -54,7 +54,6 @@ func (amp *AzureMachinePool) SetDefaults(client client.Client) error {
 		}
 	}
 
-
 	subscriptionID, err := infrav1.GetSubscriptionID(client, ownerAzureClusterName, ownerAzureClusterNamespace, 5)
 	if err != nil {
 		errs = append(errs, errors.Wrap(err, "failed to get subscription ID"))
