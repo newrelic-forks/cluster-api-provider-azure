@@ -37,14 +37,21 @@ func (amp *AzureMachinePool) SetDefaults(client client.Client) error {
 		errs = append(errs, errors.Wrap(err, "failed to set default SSH public key"))
 	}
 
-	machinePool, err := azureutil.FindParentMachinePoolWithRetry(amp.Name, client, 5)
-	if err != nil {
-		errs = append(errs, errors.Wrap(err, "failed to find parent machine pool"))
-	}
+	// the lookups could fail due to mp not being ready. NR will always match cluster name and namespace to the amp namespace.
+	skipParentLookup := true
+	ownerAzureClusterName := amp.Namespace
+	ownerAzureClusterNamespace := amp.Namespace
 
-	ownerAzureClusterName, ownerAzureClusterNamespace, err := infrav1.GetOwnerAzureClusterNameAndNamespace(client, machinePool.Spec.ClusterName, machinePool.Namespace, 5)
-	if err != nil {
-		errs = append(errs, errors.Wrap(err, "failed to get owner cluster"))
+	if !skipParentLookup {
+		machinePool, err := azureutil.FindParentMachinePoolWithRetry(amp.Name, client, 5)
+		if err != nil {
+			errs = append(errs, errors.Wrap(err, "failed to find parent machine pool"))
+		}
+
+		ownerAzureClusterName, ownerAzureClusterNamespace, err = infrav1.GetOwnerAzureClusterNameAndNamespace(client, machinePool.Spec.ClusterName, machinePool.Namespace, 5)
+		if err != nil {
+			errs = append(errs, errors.Wrap(err, "failed to get owner cluster"))
+		}
 	}
 
 	subscriptionID, err := infrav1.GetSubscriptionID(client, ownerAzureClusterName, ownerAzureClusterNamespace, 5)
