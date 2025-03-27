@@ -66,6 +66,7 @@ type ScaleSetSpec struct {
 	VMSSExtensionSpecs           []azure.ResourceSpecGetter
 	VMImage                      *infrav1.Image
 	BootstrapData                string
+	DisableExtensionOperations   bool
 	VMSSInstances                []armcompute.VirtualMachineScaleSetVM
 	MaxSurge                     int
 	ClusterName                  string

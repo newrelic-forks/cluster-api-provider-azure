@@ -290,6 +290,11 @@ func (in *AzureMachinePoolMachineTemplate) DeepCopyInto(out *AzureMachinePoolMac
 		*out = new(apiv1beta1.SpotVMOptions)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.DisableExtensionOperations != nil {
+		in, out := &in.DisableExtensionOperations, &out.DisableExtensionOperations
+		*out = new(bool)
+		**out = **in
+	}
 	if in.VMExtensions != nil {
 		in, out := &in.VMExtensions, &out.VMExtensions
 		*out = make([]apiv1beta1.VMExtension, len(*in))

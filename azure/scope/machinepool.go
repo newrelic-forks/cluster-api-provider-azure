@@ -203,6 +203,7 @@ func (m *MachinePoolScope) ScaleSetSpec(ctx context.Context) azure.ResourceSpecG
 		Identity:                     m.AzureMachinePool.Spec.Identity,
 		UserAssignedIdentities:       m.AzureMachinePool.Spec.UserAssignedIdentities,
 		DiagnosticsProfile:           m.AzureMachinePool.Spec.Template.Diagnostics,
+		DisableExtensionOperations: ptr.Deref(m.AzureMachinePool.Spec.Template.DisableExtensionOperations, false),
 		SecurityProfile:              m.AzureMachinePool.Spec.Template.SecurityProfile,
 		SpotVMOptions:                m.AzureMachinePool.Spec.Template.SpotVMOptions,
 		FailureDomains:               m.MachinePool.Spec.FailureDomains,
@@ -847,6 +848,10 @@ func (m *MachinePoolScope) HasSystemAssignedIdentity() bool {
 
 // VMSSExtensionSpecs returns the VMSS extension specs.
 func (m *MachinePoolScope) VMSSExtensionSpecs() []azure.ResourceSpecGetter {
+	if ptr.Deref(m.AzureMachinePool.Spec.Template.DisableExtensionOperations, false) {
+		return []azure.ResourceSpecGetter{}
+	}
+
 	var extensionSpecs = []azure.ResourceSpecGetter{}
 
 	for _, extension := range m.AzureMachinePool.Spec.Template.VMExtensions {
