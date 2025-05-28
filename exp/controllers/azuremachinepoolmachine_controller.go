@@ -398,6 +398,10 @@ func (r *azureMachinePoolMachineReconciler) Reconcile(ctx context.Context) error
 		return errors.Wrap(err, "failed to update VMSS VM instance status")
 	}
 
+	if err := r.Scope.RemoveStuckVMSSVM(ctx); err != nil {
+		return errors.Wrap(err, "failed to remove stuck VMSS VM")
+	}
+
 	return nil
 }
 

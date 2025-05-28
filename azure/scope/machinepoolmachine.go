@@ -20,6 +20,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -407,6 +408,30 @@ func (s *MachinePoolMachineScope) UpdateInstanceStatus(ctx context.Context) erro
 		}
 
 		s.AzureMachinePoolMachine.Status.LatestModelApplied = hasLatestModel
+	}
+
+	return nil
+}
+
+// RemoveStuckVMSSVM checks if the AzureMachinePoolMachine is stuck in provisioning, and if so, deletes it.
+// This is a workaround for when the VMSS VM is stuck in provisioning for too long.
+func (s *MachinePoolMachineScope) RemoveStuckVMSSVM(ctx context.Context) error {
+	ctx, log, done := tele.StartSpanWithLogger(
+		ctx,
+		"scope.MachinePoolMachineScope.RemoveStuckVMSSVM",
+	)
+	defer done()
+
+	// If the AzureMachinePoolMachine is stuck in provisioning for greater than 15 minutes, we will delete it.
+	// TODO: This should be configured via a flag, annotation, or spec.
+	if conditions.Has(s.AzureMachinePoolMachine, clusterv1.MachineNodeHealthyCondition) && conditions.GetReason(s.AzureMachinePoolMachine, clusterv1.MachineNodeHealthyCondition) == clusterv1.NodeProvisioningReason {
+		if time.Since(s.AzureMachinePoolMachine.CreationTimestamp.Time) >= 15*time.Minute {
+			log.Info("AzureMachinePoolMachine is stuck in provisioning for more than 15 minutes, deleting it", "name", s.AzureMachinePoolMachine.Name)
+			err := s.client.Delete(ctx, s.AzureMachinePoolMachine)
+			if err != nil {
+				return errors.Wrapf(err, "failed to delete AzureMachinePoolMachine %s", s.AzureMachinePoolMachine.Name)
+			}
+		}
 	}
 
 	return nil
