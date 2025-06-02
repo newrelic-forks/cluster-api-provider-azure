@@ -422,14 +422,22 @@ func (s *MachinePoolMachineScope) RemoveStuckVMSSVM(ctx context.Context) error {
 	)
 	defer done()
 
+	unstickAMPAnnotation := "cluster.x-k8s.io/unstick-azure-machine"
+	annotations := s.AzureMachinePoolMachine.GetAnnotations()
+	if annotations == nil {
+		return nil
+	}
+	_, hasAnnotation := annotations[unstickAMPAnnotation]
+
 	// If the AzureMachinePoolMachine is stuck in provisioning for greater than 15 minutes, we will delete it.
-	// TODO: This should be configured via a flag, annotation, or spec.
-	if conditions.Has(s.AzureMachinePoolMachine, clusterv1.MachineNodeHealthyCondition) && conditions.GetReason(s.AzureMachinePoolMachine, clusterv1.MachineNodeHealthyCondition) == clusterv1.NodeProvisioningReason {
-		if time.Since(s.AzureMachinePoolMachine.CreationTimestamp.Time) >= 15*time.Minute {
-			log.Info("AzureMachinePoolMachine is stuck in provisioning for more than 15 minutes, deleting it", "name", s.AzureMachinePoolMachine.Name)
-			err := s.client.Delete(ctx, s.AzureMachinePoolMachine)
-			if err != nil {
-				return errors.Wrapf(err, "failed to delete AzureMachinePoolMachine %s", s.AzureMachinePoolMachine.Name)
+	if hasAnnotation {
+		if conditions.Has(s.AzureMachinePoolMachine, clusterv1.MachineNodeHealthyCondition) && conditions.GetReason(s.AzureMachinePoolMachine, clusterv1.MachineNodeHealthyCondition) == clusterv1.NodeProvisioningReason {
+			if time.Since(s.AzureMachinePoolMachine.CreationTimestamp.Time) >= 15*time.Minute {
+				log.Info("AzureMachinePoolMachine is stuck in provisioning for more than 15 minutes, deleting it", "name", s.AzureMachinePoolMachine.Name)
+				err := s.client.Delete(ctx, s.AzureMachinePoolMachine)
+				if err != nil {
+					return errors.Wrapf(err, "failed to delete AzureMachinePoolMachine %s", s.AzureMachinePoolMachine.Name)
+				}
 			}
 		}
 	}
