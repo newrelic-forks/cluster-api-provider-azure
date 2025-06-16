@@ -20,6 +20,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -407,6 +408,37 @@ func (s *MachinePoolMachineScope) UpdateInstanceStatus(ctx context.Context) erro
 		}
 
 		s.AzureMachinePoolMachine.Status.LatestModelApplied = hasLatestModel
+	}
+
+	return nil
+}
+
+// RemoveStuckVMSSVM checks if the AzureMachinePoolMachine is stuck in provisioning, and if so, deletes it.
+// This is a workaround for when the VMSS VM is stuck in provisioning for too long.
+func (s *MachinePoolMachineScope) RemoveStuckVMSSVM(ctx context.Context, interval time.Duration) error {
+	ctx, log, done := tele.StartSpanWithLogger(
+		ctx,
+		"scope.MachinePoolMachineScope.RemoveStuckVMSSVM",
+	)
+	defer done()
+
+	// If the AzureMachinePoolMachine is stuck in provisioning for greater than desired threshold, we will delete it.
+	if conditions.Has(s.AzureMachinePoolMachine, clusterv1.MachineNodeHealthyCondition) && conditions.GetReason(s.AzureMachinePoolMachine, clusterv1.MachineNodeHealthyCondition) == clusterv1.NodeProvisioningReason {
+		if time.Since(s.AzureMachinePoolMachine.CreationTimestamp.Time) >= interval {
+			log.Info("AzureMachinePoolMachine is stuck in provisioning, adding delete annotation to owner Machine object", "name", s.AzureMachinePoolMachine.Name)
+
+			// Create annotations map if it doesn't exist
+			if s.Machine.Annotations == nil {
+				s.Machine.Annotations = make(map[string]string)
+			}
+
+			// If the delete annotation already exists, do nothing
+			_, ok := s.Machine.Annotations[clusterv1.DeleteMachineAnnotation]
+			if ok {
+				return nil
+			}
+			s.Machine.Annotations[clusterv1.DeleteMachineAnnotation] = "true"
+		}
 	}
 
 	return nil

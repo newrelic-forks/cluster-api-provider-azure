@@ -157,8 +157,8 @@ func TestAzureMachinePoolMachineReconciler_Reconcile(t *testing.T) {
 
 			c.Setup(cb, reconciler.EXPECT())
 			cl := cb.Build()
-			controller := NewAzureMachinePoolMachineController(cl, record.NewFakeRecorder(1), reconcilerutils.Timeouts{}, "foo", azure.NewCredentialCache())
-			controller.reconcilerFactory = func(_ *scope.MachinePoolMachineScope) (azure.Reconciler, error) {
+			controller := NewAzureMachinePoolMachineController(cl, record.NewFakeRecorder(1), reconcilerutils.Timeouts{}, "foo", azure.NewCredentialCache(), false, 15)
+			controller.reconcilerFactory = func(_ *scope.MachinePoolMachineScope, _ bool, _ time.Duration) (azure.Reconciler, error) {
 				return reconciler, nil
 			}
 			res, err := controller.Reconcile(context.TODO(), ctrl.Request{
