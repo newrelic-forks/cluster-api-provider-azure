@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -57,7 +58,7 @@ var _ = BeforeSuite(func() {
 		reconciler.Timeouts{}, "", "").SetupWithManager(ctx, testEnv.Manager, controllers.Options{Options: controller.Options{MaxConcurrentReconciles: 1}})).To(Succeed())
 
 	Expect(NewAzureMachinePoolMachineController(testEnv, testEnv.GetEventRecorderFor("azuremachinepoolmachine-reconciler"),
-		reconciler.Timeouts{}, "").SetupWithManager(ctx, testEnv.Manager, controllers.Options{Options: controller.Options{MaxConcurrentReconciles: 1}})).To(Succeed())
+		reconciler.Timeouts{}, "", false, 15*time.Minute).SetupWithManager(ctx, testEnv.Manager, controllers.Options{Options: controller.Options{MaxConcurrentReconciles: 1}})).To(Succeed())
 
 	// +kubebuilder:scaffold:scheme
 

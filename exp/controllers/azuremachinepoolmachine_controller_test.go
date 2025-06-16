@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	infrav1 "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-azure/azure"
@@ -133,13 +134,12 @@ func TestAzureMachinePoolMachineReconciler_Reconcile(t *testing.T) {
 				cb = fake.NewClientBuilder().WithScheme(scheme)
 			)
 			defer mockCtrl.Finish()
-
-			c.Setup(cb, reconciler.EXPECT())
-			cl := cb.Build()
-			controller := NewAzureMachinePoolMachineController(cl, nil, reconcilerutils.Timeouts{}, "foo")
-			controller.reconcilerFactory = func(_ *scope.MachinePoolMachineScope) (azure.Reconciler, error) {
-				return reconciler, nil
-			}
+		c.Setup(cb, reconciler.EXPECT())
+		cl := cb.Build()
+		controller := NewAzureMachinePoolMachineController(cl, record.NewFakeRecorder(1), reconcilerutils.Timeouts{}, "foo", false, 15*time.Minute)
+		controller.reconcilerFactory = func(_ *scope.MachinePoolMachineScope, _ bool, _ time.Duration) (azure.Reconciler, error) {
+			return reconciler, nil
+		}
 			res, err := controller.Reconcile(context.TODO(), ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      "ampm1",

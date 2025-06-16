@@ -50,32 +50,38 @@ import (
 )
 
 type (
-	azureMachinePoolMachineReconcilerFactory func(*scope.MachinePoolMachineScope) (azure.Reconciler, error)
+	azureMachinePoolMachineReconcilerFactory func(*scope.MachinePoolMachineScope, bool, time.Duration) (azure.Reconciler, error)
 
 	// AzureMachinePoolMachineController handles Kubernetes change events for AzureMachinePoolMachine resources.
 	AzureMachinePoolMachineController struct {
 		client.Client
-		Scheme            *runtime.Scheme
-		Recorder          record.EventRecorder
-		Timeouts          reconciler.Timeouts
-		WatchFilterValue  string
-		reconcilerFactory azureMachinePoolMachineReconcilerFactory
+		Scheme                *runtime.Scheme
+		Recorder              record.EventRecorder
+		Timeouts              reconciler.Timeouts
+		WatchFilterValue      string
+		reconcilerFactory     azureMachinePoolMachineReconcilerFactory
+		DeleteStuckVMs        bool
+		DeleteStuckVMInterval time.Duration
 	}
 
 	azureMachinePoolMachineReconciler struct {
-		Scope              *scope.MachinePoolMachineScope
-		scalesetVMsService *scalesetvms.Service
+		Scope                 *scope.MachinePoolMachineScope
+		scalesetVMsService    *scalesetvms.Service
+		DeleteStuckVMs        bool
+		DeleteStuckVMInterval time.Duration
 	}
 )
 
 // NewAzureMachinePoolMachineController creates a new AzureMachinePoolMachineController to handle updates to Azure Machine Pool Machines.
-func NewAzureMachinePoolMachineController(c client.Client, recorder record.EventRecorder, timeouts reconciler.Timeouts, watchFilterValue string) *AzureMachinePoolMachineController {
+func NewAzureMachinePoolMachineController(c client.Client, recorder record.EventRecorder, timeouts reconciler.Timeouts, watchFilterValue string, deleteStuckVMs bool, deleteStuckVMInterval time.Duration) *AzureMachinePoolMachineController {
 	return &AzureMachinePoolMachineController{
-		Client:            c,
-		Recorder:          recorder,
-		Timeouts:          timeouts,
-		WatchFilterValue:  watchFilterValue,
-		reconcilerFactory: newAzureMachinePoolMachineReconciler,
+		Client:                c,
+		Recorder:              recorder,
+		Timeouts:              timeouts,
+		WatchFilterValue:      watchFilterValue,
+		reconcilerFactory:     newAzureMachinePoolMachineReconciler,
+		DeleteStuckVMs:        deleteStuckVMs,
+		DeleteStuckVMInterval: deleteStuckVMInterval,
 	}
 }
 
@@ -264,7 +270,7 @@ func (ampmr *AzureMachinePoolMachineController) reconcileNormal(ctx context.Cont
 		return reconcile.Result{}, nil
 	}
 
-	ampms, err := ampmr.reconcilerFactory(machineScope)
+	ampms, err := ampmr.reconcilerFactory(machineScope, ampmr.DeleteStuckVMs, ampmr.DeleteStuckVMInterval)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrap(err, "failed to create AzureMachinePoolMachine reconciler")
 	}
@@ -343,7 +349,7 @@ func (ampmr *AzureMachinePoolMachineController) reconcileDelete(ctx context.Cont
 	// 1) delete the infrastructure, node drain already done by owner Machine
 	// 2) remove finalizer
 
-	ampms, err := ampmr.reconcilerFactory(machineScope)
+	ampms, err := ampmr.reconcilerFactory(machineScope, ampmr.DeleteStuckVMs, ampmr.DeleteStuckVMInterval)
 	if err != nil {
 		return reconcile.Result{}, errors.Wrap(err, "failed to create AzureMachinePoolMachine reconciler")
 	}
@@ -370,14 +376,16 @@ func (ampmr *AzureMachinePoolMachineController) reconcileDelete(ctx context.Cont
 	return reconcile.Result{}, nil
 }
 
-func newAzureMachinePoolMachineReconciler(scope *scope.MachinePoolMachineScope) (azure.Reconciler, error) {
+func newAzureMachinePoolMachineReconciler(scope *scope.MachinePoolMachineScope, deleteStuckVMs bool, deleteStuckVMInterval time.Duration) (azure.Reconciler, error) {
 	scaleSetVMsSvc, err := scalesetvms.NewService(scope)
 	if err != nil {
 		return nil, err
 	}
 	return &azureMachinePoolMachineReconciler{
-		Scope:              scope,
-		scalesetVMsService: scaleSetVMsSvc,
+		Scope:                 scope,
+		scalesetVMsService:    scaleSetVMsSvc,
+		DeleteStuckVMs:        deleteStuckVMs,
+		DeleteStuckVMInterval: deleteStuckVMInterval,
 	}, nil
 }
 
@@ -396,6 +404,12 @@ func (r *azureMachinePoolMachineReconciler) Reconcile(ctx context.Context) error
 
 	if err := r.Scope.UpdateInstanceStatus(ctx); err != nil {
 		return errors.Wrap(err, "failed to update VMSS VM instance status")
+	}
+
+	if r.DeleteStuckVMs {
+		if err := r.Scope.RemoveStuckVMSSVM(ctx, r.DeleteStuckVMInterval); err != nil {
+			return errors.Wrap(err, "failed to remove stuck VMSS VM")
+		}
 	}
 
 	return nil
