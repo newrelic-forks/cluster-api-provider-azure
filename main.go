@@ -97,27 +97,29 @@ func init() {
 }
 
 var (
-	enableLeaderElection               bool
-	leaderElectionNamespace            string
-	leaderElectionLeaseDuration        time.Duration
-	leaderElectionRenewDeadline        time.Duration
-	leaderElectionRetryPeriod          time.Duration
-	watchNamespace                     string
-	watchFilterValue                   string
-	profilerAddress                    string
-	azureClusterConcurrency            int
-	azureMachineConcurrency            int
-	azureMachinePoolConcurrency        int
-	azureMachinePoolMachineConcurrency int
-	deprecatedAzureBootrapConfigGVK    string // Deprecated in v1.19.0
-	debouncingTimer                    time.Duration
-	syncPeriod                         time.Duration
-	healthAddr                         string
-	webhookPort                        int
-	webhookCertDir                     string
-	managerOptions                     = flags.ManagerOptions{}
-	timeouts                           reconciler.Timeouts
-	enableTracing                      bool
+	enableLeaderElection                 bool
+	leaderElectionNamespace              string
+	leaderElectionLeaseDuration          time.Duration
+	leaderElectionRenewDeadline          time.Duration
+	leaderElectionRetryPeriod            time.Duration
+	watchNamespace                       string
+	watchFilterValue                     string
+	profilerAddress                      string
+	azureClusterConcurrency              int
+	azureMachineConcurrency              int
+	azureMachinePoolConcurrency          int
+	azureMachinePoolMachineConcurrency   int
+	deprecatedAzureBootrapConfigGVK      string // Deprecated in v1.19.0
+	debouncingTimer                      time.Duration
+	syncPeriod                           time.Duration
+	healthAddr                           string
+	webhookPort                          int
+	webhookCertDir                       string
+	managerOptions                       = flags.ManagerOptions{}
+	timeouts                             reconciler.Timeouts
+	enableTracing                        bool
+	azureMachinePoolMachineStuckDeletion bool
+	azureMachinePoolMachineStuckInterval time.Duration
 )
 
 // InitFlags initializes all command-line flags.
@@ -199,6 +201,18 @@ func InitFlags(fs *pflag.FlagSet) {
 		"azuremachinepoolmachine-concurrency",
 		10,
 		"Number of AzureMachinePoolMachines to process simultaneously")
+
+	fs.BoolVar(&azureMachinePoolMachineStuckDeletion,
+		"azuremachinepoolmachine-stuck-deletion",
+		false,
+		"Enable the deletion of AzureMachinePoolMachines that have been stuck pending for a pre-set amount of time",
+	)
+
+	fs.DurationVar(&azureMachinePoolMachineStuckInterval,
+		"azuremachinepoolmachine-stuck-interval",
+		15*time.Minute,
+		"The minimum interval an AzureMachinePoolMachine must be in a stuck/pending state before it is deleted",
+	)
 
 	fs.DurationVar(&debouncingTimer,
 		"debouncing-timer",
@@ -470,6 +484,8 @@ func registerControllers(ctx context.Context, mgr manager.Manager) {
 			timeouts,
 			watchFilterValue,
 			credCache,
+			azureMachinePoolMachineStuckDeletion,
+			azureMachinePoolMachineStuckInterval,
 		).SetupWithManager(ctx, mgr, controllers.Options{Options: controller.Options{MaxConcurrentReconciles: azureMachinePoolMachineConcurrency}, Cache: mpmCache}); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "AzureMachinePoolMachine")
 			os.Exit(1)
