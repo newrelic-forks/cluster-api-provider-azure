@@ -134,12 +134,12 @@ func TestAzureMachinePoolMachineReconciler_Reconcile(t *testing.T) {
 				cb = fake.NewClientBuilder().WithScheme(scheme)
 			)
 			defer mockCtrl.Finish()
-		c.Setup(cb, reconciler.EXPECT())
-		cl := cb.Build()
-		controller := NewAzureMachinePoolMachineController(cl, record.NewFakeRecorder(1), reconcilerutils.Timeouts{}, "foo", false, 15*time.Minute)
-		controller.reconcilerFactory = func(_ *scope.MachinePoolMachineScope, _ bool, _ time.Duration) (azure.Reconciler, error) {
-			return reconciler, nil
-		}
+			c.Setup(cb, reconciler.EXPECT())
+			cl := cb.Build()
+			controller := NewAzureMachinePoolMachineController(cl, record.NewFakeRecorder(1), reconcilerutils.Timeouts{}, "foo", false, 15*time.Minute)
+			controller.reconcilerFactory = func(_ *scope.MachinePoolMachineScope, _ bool, _ time.Duration) (azure.Reconciler, error) {
+				return reconciler, nil
+			}
 			res, err := controller.Reconcile(context.TODO(), ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      "ampm1",
