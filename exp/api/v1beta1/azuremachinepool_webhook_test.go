@@ -235,6 +235,54 @@ func TestAzureMachinePool_ValidateCreate(t *testing.T) {
 			wantErr:       true,
 		},
 		{
+			name: "azuremachinepool with Flexible orchestration mode and instance mixes",
+			amp: createMachinePoolWithOrchestrationModeAndInstanceMix(armcompute.OrchestrationModeFlexible,
+				"Standard_A1_v4",
+				[]string{"Standard_B1_v4", "Standard_A1_v5"}),
+			version: "v1.26.0",
+			wantErr: false,
+		},
+		{
+			name: "azuremachinepool with Flexible orchestration mode and instance mixes with unsupported family",
+			amp: createMachinePoolWithOrchestrationModeAndInstanceMix(armcompute.OrchestrationModeFlexible,
+				"Standard_A1_v4",
+				[]string{"Standard_G1"}),
+			version: "v1.26.0",
+			wantErr: true,
+		},
+		{
+			name: "azuremachinepool with Flexible orchestration mode and instance mixes with invalid family format",
+			amp: createMachinePoolWithOrchestrationModeAndInstanceMix(armcompute.OrchestrationModeFlexible,
+				"Standard_A1_v4",
+				[]string{"G1"}),
+			version: "v1.26.0",
+			wantErr: true,
+		},
+		{
+			name: "azuremachinepool with Flexible orchestration mode and instance mix has duplicate sizes",
+			amp: createMachinePoolWithOrchestrationModeAndInstanceMix(armcompute.OrchestrationModeFlexible,
+				"Standard_A1_v4",
+				[]string{"Standard_A1_v5", "Standard_A1_v5"}),
+			version: "v1.26.0",
+			wantErr: true,
+		},
+		{
+			name: "azuremachinepool with Flexible orchestration mode and instance mix has main size in additional sizes",
+			amp: createMachinePoolWithOrchestrationModeAndInstanceMix(armcompute.OrchestrationModeFlexible,
+				"Standard_A1_v4",
+				[]string{"Standard_A1_v5", "Standard_A1_v4"}),
+			version: "v1.26.0",
+			wantErr: true,
+		},
+		{
+			name: "azuremachinepool with Flexible orchestration mode and too many sizes in additionalVMSizes",
+			amp: createMachinePoolWithOrchestrationModeAndInstanceMix(armcompute.OrchestrationModeFlexible,
+				"Standard_A1_v6",
+				[]string{"Standard_A1_v5", "Standard_A1_v4", "Standard_A1_v3", "Standard_A1_v2", "Standard_A1_v2"}),
+			version: "v1.26.0",
+			wantErr: true,
+		},
+		{
 			name: "azuremachinepool with invalid DiffDiskSettings",
 			amp: createMachinePoolWithDiffDiskSettings(infrav1.DiffDiskSettings{
 				Placement: ptr.To(infrav1.DiffDiskPlacementResourceDisk),
@@ -683,6 +731,28 @@ func createMachinePoolWithOrchestrationMode(mode armcompute.OrchestrationMode) *
 			},
 		},
 	}
+}
+
+func createMachinePoolWithOrchestrationModeAndInstanceMix(mode armcompute.OrchestrationMode, primaryVMSize string, additionalVMSizes []string) *AzureMachinePool {
+	flexVMSizes := []infrav1.FlexVMProfile{}
+	for _, vm := range additionalVMSizes {
+		flexVMSizes = append(flexVMSizes, infrav1.FlexVMProfile{Size: vm})
+	}
+	amp := &AzureMachinePool{
+		Spec: AzureMachinePoolSpec{
+			OrchestrationMode:  infrav1.OrchestrationModeType(mode),
+			AllocationStrategy: infrav1.AllocationStrategyLowestPrice,
+			Template: AzureMachinePoolMachineTemplate{
+				VMSize:            primaryVMSize,
+				AdditionalVMSizes: flexVMSizes,
+				OSDisk: infrav1.OSDisk{
+					CachingType: "None",
+					OSType:      "Linux",
+				},
+			},
+		},
+	}
+	return amp
 }
 
 func createMachinePoolWithDiffDiskSettings(settings infrav1.DiffDiskSettings) *AzureMachinePool {

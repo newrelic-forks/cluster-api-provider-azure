@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/pkg/errors"
 	azprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 
@@ -275,18 +275,34 @@ func (s *Service) validateSpec(ctx context.Context) error {
 		}
 	}
 
-	// Checking if selected availability zones are available selected VM type in location
-	azsInLocation, err := s.resourceSKUCache.GetZonesWithVMSize(ctx, scaleSetSpec.Size, scaleSetSpec.Location)
-	if err != nil {
-		return errors.Wrapf(err, "failed to get zones for VM type %s in location %s", scaleSetSpec.Size, scaleSetSpec.Location)
+	// Checking if selected availability zones are available for selected VM type in location
+	if err = s.getVMZoneAvailability(ctx, scaleSetSpec.Location, scaleSetSpec.Size, scaleSetSpec.FailureDomains); err != nil {
+		return err
 	}
 
-	for _, az := range scaleSetSpec.FailureDomains {
-		if !slice.Contains(azsInLocation, az) {
-			return azure.WithTerminalError(errors.Errorf("availability zone %s is not available for VM type %s in location %s", az, scaleSetSpec.Size, scaleSetSpec.Location))
+	// Checking if selected availability zones are available for flex VM type(s) in location for flexible orchestration
+	if scaleSetSpec.OrchestrationMode == infrav1.FlexibleOrchestrationMode {
+		for _, size := range scaleSetSpec.FlexSizes {
+			if err = s.getVMZoneAvailability(ctx, scaleSetSpec.Location, size.Size, scaleSetSpec.FailureDomains); err != nil {
+				return err
+			}
 		}
 	}
 
+	return nil
+}
+
+func (s *Service) getVMZoneAvailability(ctx context.Context, location string, size string, failureDomains []string) error {
+	azsInLocation, err := s.resourceSKUCache.GetZonesWithVMSize(ctx, size, location)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get zones for VM type %s in location %s", size, location)
+	}
+
+	for _, az := range failureDomains {
+		if !slice.Contains(azsInLocation, az) {
+			return azure.WithTerminalError(errors.Errorf("availability zone %s is not available for VM type %s in location %s", az, size, location))
+		}
+	}
 	return nil
 }
 

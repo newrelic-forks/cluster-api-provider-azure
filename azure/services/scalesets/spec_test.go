@@ -55,6 +55,7 @@ var (
 	managedDiagnosticsSpec, managedDiagnoisticsVMSS                                                                                                                                       = getManagedDiagnosticsVMSS()
 	disabledDiagnosticsSpec, disabledDiagnosticsVMSS                                                                                                                                      = getDisabledDiagnosticsVMSS()
 	nilDiagnosticsProfileSpec, nilDiagnosticsProfileVMSS                                                                                                                                  = getNilDiagnosticsProfileVMSS()
+	mixedInstanceSpec, mixedInstanceVMSS                                                                                                                                                  = getMixedInstanceVMSS()
 )
 
 func getDefaultVMSS() (ScaleSetSpec, armcompute.VirtualMachineScaleSet) {
@@ -587,6 +588,39 @@ func getNilDiagnosticsProfileVMSS() (ScaleSetSpec, armcompute.VirtualMachineScal
 	return spec, vmss
 }
 
+func getMixedInstanceVMSS() (ScaleSetSpec, armcompute.VirtualMachineScaleSet) {
+	spec := newDefaultVMSSSpec()
+	spec.Size = "Standard_A1_v2"
+	spec.OrchestrationMode = "Flexible"
+	spec.FlexSizes = []infrav1.FlexVMProfile{{Size: "Standard_A1_v3"}}
+	spec.AllocationStrategy = infrav1.AllocationStrategyLowestPrice
+	spec.Capacity = 1
+
+	vmss := newDefaultVMSS("Standard_A1_v2")
+	vmss.Properties.Overprovision = nil
+	vmss.Properties.UpgradePolicy = nil
+	vmss.Properties.OrchestrationMode = ptr.To(armcompute.OrchestrationModeFlexible)
+	vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkAPIVersion =
+		ptr.To(armcompute.NetworkAPIVersionTwoThousandTwenty1101)
+	vmss.SKU = &armcompute.SKU{
+		Name:     ptr.To("Mix"),
+		Capacity: ptr.To[int64](1),
+	}
+	vmss.Properties.SKUProfile = &armcompute.SKUProfile{
+		AllocationStrategy: ptr.To(armcompute.AllocationStrategyLowestPrice),
+		VMSizes: []*armcompute.SKUProfileVMSize{
+			{
+				Name: ptr.To("Standard_A1_v2"),
+			},
+			{
+				Name: ptr.To("Standard_A1_v3"),
+			},
+		},
+	}
+
+	return spec, vmss
+}
+
 func TestScaleSetParameters(t *testing.T) {
 	testcases := []struct {
 		name          string
@@ -761,6 +795,13 @@ func TestScaleSetParameters(t *testing.T) {
 			spec:          defaultExistingSpecOnlyCapacityChangeWithCustomDataChange,
 			existing:      defaultExistingVMSSOnlyCapacityChangeWithCustomDataChange,
 			expected:      defaultExistingVMSSResultOnlyCapacityChangeWithCustomDataChange,
+			expectedError: "",
+		},
+		{
+			name:          "mixed instance vmss",
+			spec:          mixedInstanceSpec,
+			existing:      nil,
+			expected:      mixedInstanceVMSS,
 			expectedError: "",
 		},
 	}

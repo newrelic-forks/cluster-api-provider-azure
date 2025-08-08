@@ -20,8 +20,10 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/blang/semver"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -103,6 +105,7 @@ func (amp *AzureMachinePool) Validate(old runtime.Object, client client.Client) 
 		amp.ValidateSystemAssignedIdentityRole,
 		amp.ValidateNetwork,
 		amp.ValidateOSDisk,
+		amp.ValidateInstanceMix,
 	}
 
 	var errs []error
@@ -318,4 +321,58 @@ func (amp *AzureMachinePool) ValidateOrchestrationMode(c client.Client) func() e
 
 		return nil
 	}
+}
+
+// ValidateInstanceMix validates certain instance mix limitations are not violated.
+func (amp *AzureMachinePool) ValidateInstanceMix() error {
+	if amp.Spec.OrchestrationMode == infrav1.FlexibleOrchestrationMode {
+		const standardPrefix = "Standard_"
+		supportedFamilies := []string{"A", "B", "D", "E", "F"}
+		seenSizes := make(map[string]bool)
+		mainVMSize := amp.Spec.Template.VMSize
+
+		// Only up to four additional VM sizes can be specified.
+		if len(amp.Spec.Template.AdditionalVMSizes) > 4 {
+			return errors.New("a maximum of 4 additionalVmSizes is allowed when using flexible orchestration")
+		}
+
+		// Check for two things in the additionalVMSizes
+		// 1. Check that all VM sizes are from supported families
+		// 2. Check for duplicates in additional VM sizes and ensure main VM size is not repeated
+		for _, vmSize := range amp.Spec.Template.AdditionalVMSizes {
+			// Extract the VM family from the VM size
+			// Azure VM sizes follow the pattern: Standard_{Family}{Size}[qualifiers]
+			// Examples: Standard_D4s_v3 -> D, Standard_B2ms -> B
+			if !strings.HasPrefix(vmSize.Size, standardPrefix) {
+				return fmt.Errorf("vm size in additionalVmSizes is expected to start with %s, got %s", standardPrefix, vmSize.Size)
+			}
+
+			// Remove the "Standard_" prefix
+			remainder := vmSize.Size[len(standardPrefix):]
+			if remainder == "" {
+				return errors.New("vm size in additionalVmSizes is expected to have a family and size, got nothing")
+			}
+
+			// The first character after "Standard_" should be the family letter for supported families
+			family := string(remainder[0])
+
+			// Check that the family is supported
+			if !slices.Contains(supportedFamilies, family) {
+				return fmt.Errorf("unsupported VM family, got: %s, expected one of: %v", family, supportedFamilies)
+			}
+
+			// Check for duplicates in additional VM sizes and ensure main VM size is not repeated
+			if vmSize.Size == mainVMSize {
+				return fmt.Errorf("additionalVmSizes cannot contain the main VM size %s", mainVMSize)
+			}
+
+			// Check for duplicates within additional VM sizes
+			if seenSizes[vmSize.Size] {
+				return fmt.Errorf("duplicate VM size %s found in additionalVmSizes", vmSize.Size)
+			}
+			seenSizes[vmSize.Size] = true
+		}
+	}
+
+	return nil
 }

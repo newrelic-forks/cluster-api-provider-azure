@@ -88,6 +88,15 @@ spec:
                   Azure provider. If both the AzureCluster and the AzureMachine specify the same tag name with different values, the
                   AzureMachine's value takes precedence.
                 type: object
+              allocationStrategy:
+                default: LowestPrice
+                description: AllocationStrategy specifies the strategy for selecting
+                  a VM size for the VMSS when in Flexible Orchestration mode
+                enum:
+                - LowestPrice
+                - CapacityOptimized
+                - Prioritized
+                type: string
               identity:
                 default: None
                 description: |-
@@ -246,6 +255,23 @@ spec:
                           otherwise it doesn't set the capability on the VM.
                         type: boolean
                     type: object
+                  additionalVmSizes:
+                    description: AdditionalVMSizes is the list of VM sizes to utilize
+                      in addition to VMSize in a VMSS with flexible orchestration
+                    items:
+                      description: FlexVMProfile represents a size + priority (if
+                        applicable) for additional VMs to use in a Flexible Orchestration
+                        Mode VMSS.
+                      properties:
+                        priority:
+                          format: int32
+                          type: integer
+                        size:
+                          type: string
+                      required:
+                      - size
+                      type: object
+                    type: array
                   dataDisks:
                     description: DataDisks specifies the list of data disks to be
                       created for a Virtual Machine
@@ -771,7 +797,7 @@ spec:
                     type: array
                   vmSize:
                     description: |-
-                      VMSize is the size of the Virtual Machine to build.
+                      VMSize is the size of the Virtual Machine to build. Assumed to have highest priority in Flexible orchestration VMSS using the Prioritized allocation strategy.
                       See https://learn.microsoft.com/rest/api/compute/virtualmachines/createorupdate#virtualmachinesizetypes
                     type: string
                 required:

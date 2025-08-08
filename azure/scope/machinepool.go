@@ -95,6 +95,7 @@ type (
 		HasBootstrapDataChanges bool
 		VMImage                 *infrav1.Image
 		VMSKU                   resourceskus.SKU
+		AdditionalVMSKUs        []resourceskus.SKU
 		MaxSurge                int
 	}
 )
@@ -172,9 +173,21 @@ func (m *MachinePoolScope) InitMachinePoolCache(ctx context.Context) error {
 			m.skuCache = skuCache
 		}
 
+		// Always get the standard VM SKU since it is mandatory
 		m.cache.VMSKU, err = m.skuCache.Get(ctx, m.AzureMachinePool.Spec.Template.VMSize, resourceskus.VirtualMachines)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get VM SKU %s in compute api", m.AzureMachinePool.Spec.Template.VMSize)
+		}
+
+		// Otherwise if the MachinePool is in flexible orchestration, get the VM SKUs for all flexible VM sizes.
+		if m.AzureMachinePool.Spec.OrchestrationMode == infrav1.FlexibleOrchestrationMode {
+			for _, v := range m.AzureMachinePool.Spec.Template.AdditionalVMSizes {
+				additionalSku, err := m.skuCache.Get(ctx, v.Size, resourceskus.VirtualMachines)
+				if err != nil {
+					return errors.Wrapf(err, "failed to get additional VM SKU %s in compute api", v.Size)
+				}
+				m.cache.AdditionalVMSKUs = append(m.cache.AdditionalVMSKUs, additionalSku)
+			}
 		}
 	}
 
@@ -190,6 +203,7 @@ func (m *MachinePoolScope) ScaleSetSpec(ctx context.Context) azure.ResourceSpecG
 		Name:                         m.Name(),
 		ResourceGroup:                m.NodeResourceGroup(),
 		Size:                         m.AzureMachinePool.Spec.Template.VMSize,
+		FlexSizes:                    m.AzureMachinePool.Spec.Template.AdditionalVMSizes,
 		Capacity:                     int64(ptr.Deref[int32](m.MachinePool.Spec.Replicas, 0)),
 		SSHKeyData:                   m.AzureMachinePool.Spec.Template.SSHPublicKey,
 		OSDisk:                       m.AzureMachinePool.Spec.Template.OSDisk,
@@ -211,6 +225,7 @@ func (m *MachinePoolScope) ScaleSetSpec(ctx context.Context) azure.ResourceSpecG
 		NetworkInterfaces:            m.AzureMachinePool.Spec.Template.NetworkInterfaces,
 		IPv6Enabled:                  m.IsIPv6Enabled(),
 		OrchestrationMode:            m.AzureMachinePool.Spec.OrchestrationMode,
+		AllocationStrategy:           m.AzureMachinePool.Spec.AllocationStrategy,
 		Location:                     m.AzureMachinePool.Spec.Location,
 		SubscriptionID:               m.SubscriptionID(),
 		HasReplicasExternallyManaged: m.HasReplicasExternallyManaged(ctx),
@@ -230,6 +245,7 @@ func (m *MachinePoolScope) ScaleSetSpec(ctx context.Context) azure.ResourceSpecG
 		log.V(4).Info("has bootstrap data changed?", "shouldPatchCustomData", spec.ShouldPatchCustomData)
 		spec.VMSSExtensionSpecs = m.VMSSExtensionSpecs()
 		spec.SKU = m.cache.VMSKU
+		spec.FlexSKUs = m.cache.AdditionalVMSKUs
 		spec.VMImage = m.cache.VMImage
 		spec.BootstrapData = m.cache.BootstrapData
 		spec.MaxSurge = m.cache.MaxSurge

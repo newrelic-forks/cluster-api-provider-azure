@@ -1175,6 +1175,24 @@ const (
 	UniformOrchestrationMode OrchestrationModeType = "Uniform"
 )
 
+// AllocationStrategyType represents the strategy for selecting a VM Size to provision during scale up with a flexible orchestration mode VMSS.
+type AllocationStrategyType string
+
+const (
+	// AllocationStrategyLowestPrice selects the lowest price VM size.
+	AllocationStrategyLowestPrice AllocationStrategyType = "LowestPrice"
+	// AllocationStrategyPrioritized selects the highest priority VM size.
+	AllocationStrategyPrioritized AllocationStrategyType = "Prioritized"
+	// AllocationStrategyCapacityOptimized selects the VM size with the highest capacity.
+	AllocationStrategyCapacityOptimized AllocationStrategyType = "CapacityOptimized"
+)
+
+// FlexVMProfile represents a size + priority (if applicable) for additional VMs to use in a Flexible Orchestration Mode VMSS.
+type FlexVMProfile struct {
+	Size     string `json:"size"`
+	Priority int32  `json:"priority,omitempty"`
+}
+
 // ExtensionPlan represents the plan for an AKS marketplace extension.
 type ExtensionPlan struct {
 	// Name is the user-defined name of the 3rd Party Artifact that is being procured.

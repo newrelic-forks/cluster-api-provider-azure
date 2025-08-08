@@ -44,9 +44,13 @@ const (
 type (
 	// AzureMachinePoolMachineTemplate defines the template for an AzureMachine.
 	AzureMachinePoolMachineTemplate struct {
-		// VMSize is the size of the Virtual Machine to build.
+		// VMSize is the size of the Virtual Machine to build. Assumed to have highest priority in Flexible orchestration VMSS using the Prioritized allocation strategy.
 		// See https://learn.microsoft.com/rest/api/compute/virtualmachines/createorupdate#virtualmachinesizetypes
 		VMSize string `json:"vmSize"`
+
+		// AdditionalVMSizes is the list of VM sizes to utilize in addition to VMSize in a VMSS with flexible orchestration
+		// +optional
+		AdditionalVMSizes []infrav1.FlexVMProfile `json:"additionalVmSizes,omitempty"`
 
 		// Image is used to provide details of an image to use during VM creation.
 		// If image details are omitted the image will default the Azure Marketplace "capi" offer,
@@ -164,6 +168,12 @@ type (
 		// OrchestrationMode specifies the orchestration mode for the Virtual Machine Scale Set
 		// +kubebuilder:default=Uniform
 		OrchestrationMode infrav1.OrchestrationModeType `json:"orchestrationMode,omitempty"`
+
+		// AllocationStrategy specifies the strategy for selecting a VM size for the VMSS when in Flexible Orchestration mode
+		// +optional
+		// +kubebuilder:validation:Enum=LowestPrice;CapacityOptimized;Prioritized
+		// +kubebuilder:default=LowestPrice
+		AllocationStrategy infrav1.AllocationStrategyType `json:"allocationStrategy,omitempty"`
 
 		// PlatformFaultDomainCount specifies the number of fault domains that the Virtual Machine Scale Set can use.
 		// The count determines the spreading algorithm of the Azure fault domain.
