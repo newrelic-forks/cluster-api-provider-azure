@@ -21,7 +21,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"

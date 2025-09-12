@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
@@ -39,6 +39,7 @@ type ScaleSetSpec struct {
 	Name                         string
 	ResourceGroup                string
 	Size                         string
+	FlexSizes                    []infrav1.FlexVMProfile
 	Capacity                     int64
 	SSHKeyData                   string
 	OSDisk                       infrav1.OSDisk
@@ -61,9 +62,11 @@ type ScaleSetSpec struct {
 	NetworkInterfaces            []infrav1.NetworkInterface
 	IPv6Enabled                  bool
 	OrchestrationMode            infrav1.OrchestrationModeType
+	AllocationStrategy           infrav1.AllocationStrategyType
 	Location                     string
 	SubscriptionID               string
 	SKU                          resourceskus.SKU
+	FlexSKUs                     []resourceskus.SKU
 	VMSSExtensionSpecs           []azure.ResourceSpecGetter
 	VMImage                      *infrav1.Image
 	BootstrapData                string
@@ -122,6 +125,7 @@ func (s *ScaleSetSpec) existingParameters(ctx context.Context, existing interfac
 	if !isFlex {
 		updated = existingInfraVMSS.HasEnoughLatestModelOrNotMixedModel()
 	}
+
 	if s.MaxSurge > 0 && (hasModelChanges || !updated) && !s.HasReplicasExternallyManaged {
 		// surge capacity with the intention of lowering during instance reconciliation
 		surge := s.Capacity + int64(s.MaxSurge)
@@ -228,6 +232,34 @@ func (s *ScaleSetSpec) Parameters(ctx context.Context, existing interface{}) (pa
 		vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkAPIVersion =
 			ptr.To(armcompute.NetworkAPIVersionTwoThousandTwenty1101)
 		vmss.Properties.PlatformFaultDomainCount = ptr.To[int32](1)
+		vmss.SKU = &armcompute.SKU{
+			Name:     ptr.To("Mix"),
+			Capacity: ptr.To[int64](s.Capacity),
+		}
+
+		var flexVMSizes []*armcompute.SKUProfileVMSize
+		// For Flexible VMSS, add the primary VM size and all the flexible VM sizes.
+		tmpSkuProfileVMSize := &armcompute.SKUProfileVMSize{
+			Name: ptr.To(s.Size),
+		}
+		if armcompute.AllocationStrategy(s.AllocationStrategy) == armcompute.AllocationStrategyPrioritized {
+			tmpSkuProfileVMSize.Rank = ptr.To[int32](0)
+		}
+		flexVMSizes = append(flexVMSizes, tmpSkuProfileVMSize)
+
+		for _, size := range s.FlexSizes {
+			tmpSkuProfileVMSize = &armcompute.SKUProfileVMSize{
+				Name: ptr.To(size.Size),
+			}
+			if armcompute.AllocationStrategy(s.AllocationStrategy) == armcompute.AllocationStrategyPrioritized {
+				tmpSkuProfileVMSize.Rank = ptr.To[int32](size.Priority)
+			}
+			flexVMSizes = append(flexVMSizes, tmpSkuProfileVMSize)
+		}
+		vmss.Properties.SKUProfile = &armcompute.SKUProfile{
+			AllocationStrategy: ptr.To(armcompute.AllocationStrategy(s.AllocationStrategy)),
+			VMSizes:            flexVMSizes,
+		}
 	}
 
 	if s.PlatformFaultDomainCount != nil {

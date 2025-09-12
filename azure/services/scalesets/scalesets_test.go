@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -323,6 +323,19 @@ func TestReconcileVMSS(t *testing.T) {
 						UserManaged:        nil,
 					},
 				}
+				s.ScaleSetSpec(gomockinternal.AContext()).Return(&spec).AnyTimes()
+			},
+		},
+		{
+			name:          "validate spec failure: fail to verify availability zone support for VM Type",
+			expectedError: "reconcile error that cannot be recovered occurred: availability zone 2 is not available for VM type VM_SIZE_USSD in location test-location. Object will not be requeued",
+			expect: func(g *WithT, s *mock_scalesets.MockScaleSetScopeMockRecorder, r *mock_async.MockReconcilerMockRecorder, m *mock_scalesets.MockClientMockRecorder) {
+				s.DefaultedAzureServiceReconcileTimeout().Return(reconciler.DefaultAzureServiceReconcileTimeout)
+				spec := newDefaultVMSSSpec()
+				spec.Size = vmSizeUSSD
+				spec.FailureDomains = []string{"2"}
+				spec.Capacity = 2
+				spec.SSHKeyData = sshKeyData
 				s.ScaleSetSpec(gomockinternal.AContext()).Return(&spec).AnyTimes()
 			},
 		},
