@@ -416,7 +416,7 @@ func (s *MachinePoolMachineScope) UpdateInstanceStatus(ctx context.Context) erro
 // RemoveStuckVMSSVM checks if the AzureMachinePoolMachine is stuck in provisioning, and if so, deletes it.
 // This is a workaround for when the VMSS VM is stuck in provisioning for too long.
 func (s *MachinePoolMachineScope) RemoveStuckVMSSVM(ctx context.Context, interval time.Duration) error {
-	ctx, log, done := tele.StartSpanWithLogger(
+	_, log, done := tele.StartSpanWithLogger(
 		ctx,
 		"scope.MachinePoolMachineScope.RemoveStuckVMSSVM",
 	)
