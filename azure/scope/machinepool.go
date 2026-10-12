@@ -489,7 +489,7 @@ func (m *MachinePoolScope) applyAzureMachinePoolMachines(ctx context.Context) er
 	// MLC controls target selection and pacing; CAPZ should only create replacements,
 	// not independently remove outdated machines during the unpause window.
 	if m.AzureMachinePool.Annotations["MLC-Status"] == "InProgress" {
-		log.V(4).Info("exiting early: MLC rotation in progress, skipping SelectMachinesToDelete")
+		log.V(2).Info("exiting early: MLC rotation in progress, skipping SelectMachinesToDelete")
 		return nil
 	}
 
