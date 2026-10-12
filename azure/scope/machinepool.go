@@ -485,6 +485,14 @@ func (m *MachinePoolScope) applyAzureMachinePoolMachines(ctx context.Context) er
 		return nil
 	}
 
+	// When MLC is managing a rotation, skip model-reconciliation-driven deletes.
+	// MLC controls target selection and pacing; CAPZ should only create replacements,
+	// not independently remove outdated machines during the unpause window.
+	if m.AzureMachinePool.Annotations["MLC-Status"] == "InProgress" {
+		log.V(2).Info("exiting early: MLC rotation in progress, skipping SelectMachinesToDelete")
+		return nil
+	}
+
 	deleteSelector := m.getDeploymentStrategy()
 	if deleteSelector == nil {
 		log.V(4).Info("can not select AzureMachinePoolMachines to delete because no deployment strategy is specified")
