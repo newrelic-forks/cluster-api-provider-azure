@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/authorization/armauthorization/v2"
 	"github.com/pkg/errors"
@@ -59,6 +60,16 @@ import (
 // TODO: move this to scalesets.go once we remove the usage in this package,
 // added here to avoid a circular dependency.
 const ScalesetsServiceName = "scalesets"
+
+// Annotations written by New Relic's machine-lifecycle-controller (MLC).
+const (
+	mlcStatusAnnotation       = "MLC-Status"
+	mlcStatusInProgress       = "InProgress"
+	mlcStrategyHoldAnnotation = "MLC-Status-strategy-HOLD"
+	mlcOptOutAnnotation       = "machine-lifecycle.newrelic.com/upgradeAfter"
+	// mlcOptOutLayout matches the layout MLC parses upgradeAfter with.
+	mlcOptOutLayout = "2006-01-02T15:04:05Z"
+)
 
 type (
 	// MachinePoolScopeParams defines the input parameters used to create a new MachinePoolScope.
@@ -488,9 +499,12 @@ func (m *MachinePoolScope) applyAzureMachinePoolMachines(ctx context.Context) er
 	// When MLC is managing a rotation, skip model-reconciliation-driven deletes.
 	// MLC controls target selection and pacing; CAPZ should only create replacements,
 	// not independently remove outdated machines during the unpause window.
-	if m.AzureMachinePool.Annotations["MLC-Status"] == "InProgress" {
-		log.V(2).Info("exiting early: MLC rotation in progress, skipping SelectMachinesToDelete")
-		return nil
+	if m.AzureMachinePool.Annotations[mlcStatusAnnotation] == mlcStatusInProgress {
+		if m.isMLCManagedRotation() {
+			log.V(2).Info("exiting early: MLC rotation in progress, skipping SelectMachinesToDelete")
+			return nil
+		}
+		log.Info("ignoring MLC-Status=InProgress: MLC does not own a rotation on this pool (no strategy hold, or MachinePool opted out of MLC); remove the stale annotation")
 	}
 
 	deleteSelector := m.getDeploymentStrategy()
@@ -962,6 +976,26 @@ func (m *MachinePoolScope) PatchCAPIMachinePoolObject(ctx context.Context) error
 // UpdateCAPIMachinePoolReplicas updates the associated MachinePool replica count.
 func (m *MachinePoolScope) UpdateCAPIMachinePoolReplicas(_ context.Context, replicas *int32) {
 	m.MachinePool.Spec.Replicas = replicas
+}
+
+// isMLCManagedRotation reports whether machine-lifecycle-controller currently owns a rotation
+// of this pool. MLC writes MLC-Status=InProgress and MLC-Status-strategy-HOLD in the same patch
+// and only drives pools whose MachinePool is not opted out via upgradeAfter. Requiring all of
+// these keeps a hand-set or orphaned MLC-Status from blocking scale-down indefinitely.
+func (m *MachinePoolScope) isMLCManagedRotation() bool {
+	if _, ok := m.AzureMachinePool.Annotations[mlcStrategyHoldAnnotation]; !ok {
+		return false
+	}
+	if m.MachinePool == nil {
+		return true
+	}
+	upgradeAfter, ok := m.MachinePool.Annotations[mlcOptOutAnnotation]
+	if !ok {
+		return true
+	}
+	// MLC skips pools with an unparseable upgradeAfter, so treat that as opted out too.
+	t, err := time.Parse(mlcOptOutLayout, upgradeAfter)
+	return err == nil && !time.Now().Before(t)
 }
 
 // HasReplicasExternallyManaged returns true if the externally managed annotation is set on the CAPI MachinePool resource.

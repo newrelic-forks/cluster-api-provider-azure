@@ -1457,6 +1457,79 @@ func TestMachinePoolScope_applyAzureMachinePoolMachines(t *testing.T) {
 			},
 		},
 		{
+			Name: "if MLC owns the rotation and overProvisionCount > 0, do not reduce replicas",
+			Setup: func(mp *expv1.MachinePool, amp *infrav1exp.AzureMachinePool, vmssState *azure.VMSS, cb *fake.ClientBuilder) {
+				mp.Spec.Replicas = ptr.To[int32](1)
+				amp.Annotations = map[string]string{mlcStatusAnnotation: mlcStatusInProgress, mlcStrategyHoldAnnotation: `{"type":"RollingUpdate"}`}
+				overProvisionByOne(cb, vmssState)
+			},
+			Verify: func(g *WithT, amp *infrav1exp.AzureMachinePool, c client.Client, err error) {
+				g.Expect(err).NotTo(HaveOccurred())
+				list := clusterv1.MachineList{}
+				g.Expect(c.List(ctx, &list)).NotTo(HaveOccurred())
+				g.Expect(list.Items).Should(HaveLen(2))
+			},
+		},
+		{
+			Name: "if MLC owns the rotation and the MachinePool opt-out has passed, do not reduce replicas",
+			Setup: func(mp *expv1.MachinePool, amp *infrav1exp.AzureMachinePool, vmssState *azure.VMSS, cb *fake.ClientBuilder) {
+				mp.Spec.Replicas = ptr.To[int32](1)
+				amp.Annotations = map[string]string{mlcStatusAnnotation: mlcStatusInProgress, mlcStrategyHoldAnnotation: `{"type":"RollingUpdate"}`}
+				mp.Annotations = map[string]string{mlcOptOutAnnotation: "2000-01-01T00:00:00Z"}
+				overProvisionByOne(cb, vmssState)
+			},
+			Verify: func(g *WithT, amp *infrav1exp.AzureMachinePool, c client.Client, err error) {
+				g.Expect(err).NotTo(HaveOccurred())
+				list := clusterv1.MachineList{}
+				g.Expect(c.List(ctx, &list)).NotTo(HaveOccurred())
+				g.Expect(list.Items).Should(HaveLen(2))
+			},
+		},
+		{
+			Name: "if MLC-Status is InProgress without a strategy hold, reduce replicas",
+			Setup: func(mp *expv1.MachinePool, amp *infrav1exp.AzureMachinePool, vmssState *azure.VMSS, cb *fake.ClientBuilder) {
+				mp.Spec.Replicas = ptr.To[int32](1)
+				amp.Annotations = map[string]string{mlcStatusAnnotation: mlcStatusInProgress}
+				overProvisionByOne(cb, vmssState)
+			},
+			Verify: func(g *WithT, amp *infrav1exp.AzureMachinePool, c client.Client, err error) {
+				g.Expect(err).NotTo(HaveOccurred())
+				list := clusterv1.MachineList{}
+				g.Expect(c.List(ctx, &list)).NotTo(HaveOccurred())
+				g.Expect(list.Items).Should(HaveLen(1))
+			},
+		},
+		{
+			Name: "if MLC-Status is InProgress but the MachinePool is opted out of MLC, reduce replicas",
+			Setup: func(mp *expv1.MachinePool, amp *infrav1exp.AzureMachinePool, vmssState *azure.VMSS, cb *fake.ClientBuilder) {
+				mp.Spec.Replicas = ptr.To[int32](1)
+				amp.Annotations = map[string]string{mlcStatusAnnotation: mlcStatusInProgress, mlcStrategyHoldAnnotation: `{"type":"RollingUpdate"}`}
+				mp.Annotations = map[string]string{mlcOptOutAnnotation: "2126-08-06T00:00:00Z"}
+				overProvisionByOne(cb, vmssState)
+			},
+			Verify: func(g *WithT, amp *infrav1exp.AzureMachinePool, c client.Client, err error) {
+				g.Expect(err).NotTo(HaveOccurred())
+				list := clusterv1.MachineList{}
+				g.Expect(c.List(ctx, &list)).NotTo(HaveOccurred())
+				g.Expect(list.Items).Should(HaveLen(1))
+			},
+		},
+		{
+			Name: "if MLC-Status is InProgress and the MachinePool opt-out is unparseable, reduce replicas",
+			Setup: func(mp *expv1.MachinePool, amp *infrav1exp.AzureMachinePool, vmssState *azure.VMSS, cb *fake.ClientBuilder) {
+				mp.Spec.Replicas = ptr.To[int32](1)
+				amp.Annotations = map[string]string{mlcStatusAnnotation: mlcStatusInProgress, mlcStrategyHoldAnnotation: `{"type":"RollingUpdate"}`}
+				mp.Annotations = map[string]string{mlcOptOutAnnotation: "not-a-date"}
+				overProvisionByOne(cb, vmssState)
+			},
+			Verify: func(g *WithT, amp *infrav1exp.AzureMachinePool, c client.Client, err error) {
+				g.Expect(err).NotTo(HaveOccurred())
+				list := clusterv1.MachineList{}
+				g.Expect(c.List(ctx, &list)).NotTo(HaveOccurred())
+				g.Expect(list.Items).Should(HaveLen(1))
+			},
+		},
+		{
 			Name: "if existing MachinePool is not present, reduce replicas",
 			Setup: func(mp *expv1.MachinePool, amp *infrav1exp.AzureMachinePool, vmssState *azure.VMSS, cb *fake.ClientBuilder) {
 				mp.Spec.Replicas = ptr.To[int32](1)
@@ -1575,6 +1648,23 @@ func TestMachinePoolScope_applyAzureMachinePoolMachines(t *testing.T) {
 			err := s.applyAzureMachinePoolMachines(ctx)
 			tt.Verify(g, s.AzureMachinePool, s.client, err)
 		})
+	}
+}
+
+// overProvisionByOne registers two AzureMachinePoolMachines (with owner Machines) backed by two VMSS instances.
+func overProvisionByOne(cb *fake.ClientBuilder, vmssState *azure.VMSS) {
+	mpm1, ampm1 := getAzureMachinePoolMachineWithOwnerMachine(1)
+	mpm2, ampm2 := getAzureMachinePoolMachineWithOwnerMachine(2)
+	cb.WithObjects(&mpm1, &ampm1, &mpm2, &ampm2)
+	vmssState.Instances = []azure.VMSSVM{
+		{
+			ID:   "/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Compute/virtualMachineScaleSets/my-vmss/virtualMachines/1",
+			Name: "ampm1",
+		},
+		{
+			ID:   "/subscriptions/123/resourceGroups/my-rg/providers/Microsoft.Compute/virtualMachineScaleSets/my-vmss/virtualMachines/2",
+			Name: "ampm2",
+		},
 	}
 }
 
